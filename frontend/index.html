@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Memory Framework</title>
+    <!-- Fonts: Inter for UI, JetBrains Mono for code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- View 1: Landing Page -->
+        <section id="view-landing" class="view-section active">
+            <div class="landing-content">
+                <div class="logo-mark">CMF</div>
+                <h1 class="landing-title">Context Memory Framework</h1>
+                <p class="landing-subtitle">Ask your database questions in plain English.</p>
+                <p class="landing-description">
+                    Connect your relational database, explore its schema, and turn natural language into executable SQL with contextual AI.
+                </p>
+                <div class="landing-actions">
+                    <button id="btn-start-connect" class="btn-primary">Connect Database</button>
+                    <button id="btn-demo" class="btn-secondary">Explore Demo</button>
+                </div>
+                <div class="tech-indicators">
+                    <span>PostgreSQL</span> • <span>MySQL</span> • <span>SQLite</span> • <span>Natural Language → SQL</span>
+                </div>
+                
+                <div class="hero-visual">
+                    <div class="visual-header">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <div class="visual-title">CMF Intelligence</div>
+                    </div>
+                    <div class="visual-body">
+                        <div class="visual-step">
+                            <span class="v-label">QUESTION</span>
+                            <span class="v-text">Show me the top 5 customers by total spending.</span>
+                        </div>
+                        <div class="visual-arrow">↓</div>
+                        <div class="visual-step">
+                            <span class="v-label">CONTEXT RETRIEVED</span>
+                            <span class="v-code">customers, orders, order_items</span>
+                        </div>
+                        <div class="visual-arrow">↓</div>
+                        <div class="visual-step">
+                            <span class="v-label">GENERATED SQL</span>
+                            <pre><code><span class="sql-keyword">SELECT</span> c.name, <span class="sql-function">SUM</span>(o.total) <span class="sql-keyword">AS</span> spending
+<span class="sql-keyword">FROM</span> customers c
+<span class="sql-keyword">JOIN</span> orders o <span class="sql-keyword">ON</span> c.id = o.customer_id
+<span class="sql-keyword">GROUP BY</span> c.name
+<span class="sql-keyword">ORDER BY</span> spending <span class="sql-keyword">DESC</span>
+<span class="sql-keyword">LIMIT</span> <span class="sql-number">5</span>;</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View 2: Connection Flow -->
+        <section id="view-connect" class="view-section hidden">
+            <div class="connect-modal">
+                <div class="modal-header">
+                    <h2>Connect Database</h2>
+                    <p>Select your database type to get started.</p>
+                </div>
+                <div class="modal-body">
+                    
+                    <!-- Step 1: Choose Database -->
+                    <div id="connect-step-1" class="connect-step active">
+                        <div class="db-options">
+                            <div class="db-option" data-db="postgresql">
+                                <div class="db-icon">PG</div>
+                                <div class="db-info">
+                                    <h3>PostgreSQL</h3>
+                                    <p>Connect to a PostgreSQL instance</p>
+                                </div>
+                            </div>
+                            <div class="db-option" data-db="mysql">
+                                <div class="db-icon">MY</div>
+                                <div class="db-info">
+                                    <h3>MySQL</h3>
+                                    <p>Connect to a MySQL instance</p>
+                                </div>
+                            </div>
+                            <div class="db-option" data-db="sqlite">
+                                <div class="db-icon">SQ</div>
+                                <div class="db-info">
+                                    <h3>SQLite</h3>
+                                    <p>Connect to a local SQLite file</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="btn-back-landing" class="btn-secondary">Cancel</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Credentials -->
+                    <div id="connect-step-2" class="connect-step hidden">
+                        <div class="selected-db-indicator">
+                            <span id="selected-db-name">PostgreSQL</span>
+                            <button id="btn-change-db" class="btn-text">Change</button>
+                        </div>
+                        
+                        <form id="connection-form">
+                            <input type="hidden" id="db-type" value="postgresql">
+                            
+                            <div class="form-group pg-my-only">
+                                <label for="db-host">Host</label>
+                                <input type="text" id="db-host" placeholder="localhost or IP address" value="localhost">
+                            </div>
+                            
+                            <div class="form-row pg-my-only">
+                                <div class="form-group">
+                                    <label for="db-port">Port</label>
+                                    <input type="number" id="db-port" placeholder="5432" value="5432">
+                                </div>
+                                <div class="form-group">
+                                    <label for="db-name">Database Name</label>
+                                    <input type="text" id="db-name" placeholder="postgres" required>
+                                </div>
+                            </div>
+
+                            <div class="form-row pg-my-only">
+                                <div class="form-group">
+                                    <label for="db-user">Username</label>
+                                    <input type="text" id="db-user" placeholder="postgres" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="db-pass">Password</label>
+                                    <input type="password" id="db-pass" placeholder="••••••••" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group sqlite-only hidden">
+                                <label for="sqlite-path">Database File Path (or Name)</label>
+                                <input type="text" id="sqlite-path" placeholder="e.g. data.db" required>
+                            </div>
+
+                            <div class="security-notice">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                Credentials are encrypted and stored securely.
+                            </div>
+                            
+                            <div class="modal-actions space-between">
+                                <button type="button" id="btn-test-connection" class="btn-secondary">Test Connection</button>
+                                <button type="submit" id="btn-connect-sync" class="btn-primary">Connect & Sync</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Step 3: Loading / Syncing -->
+                    <div id="connect-step-3" class="connect-step hidden">
+                        <div class="sync-loader">
+                            <div class="spinner"></div>
+                            <h3 id="sync-status-text">Connecting to database...</h3>
+                            <div class="sync-steps">
+                                <div class="sync-step pending" id="sync-s1">Establish connection</div>
+                                <div class="sync-step pending" id="sync-s2">Retrieve schema</div>
+                                <div class="sync-step pending" id="sync-s3">Build context map</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- View 3: Main Workspace -->
+        <section id="view-workspace" class="view-section hidden">
+            
+            <!-- Left Sidebar -->
+            <aside class="sidebar-left">
+                <div class="sidebar-header">
+                    <div class="logo-mark small">CMF</div>
+                    <span class="brand-text">Context Memory</span>
+                </div>
+                
+                <div class="db-status-section">
+                    <div class="section-title">CURRENT DATABASE</div>
+                    <div class="active-db-card">
+                        <div class="db-icon small">PG</div>
+                        <div class="db-meta">
+                            <div class="db-name" id="workspace-db-name">sales_db</div>
+                            <div class="db-status"><span class="status-dot"></span>Connected</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="explorer-section">
+                    <div class="section-title">DATABASE EXPLORER</div>
+                    <div class="schema-tree" id="schema-tree">
+                        <!-- Mocked or populated schema tree -->
+                        <div class="schema-placeholder">Run a query to build context...</div>
+                    </div>
+                </div>
+                
+                <div class="sidebar-footer">
+                    <button id="btn-disconnect" class="btn-text text-danger">Disconnect</button>
+                </div>
+            </aside>
+
+            <!-- Center Workspace -->
+            <main class="workspace-main">
+                <header class="workspace-header">
+                    <div class="header-titles">
+                        <h2>Ask your database</h2>
+                        <p>Describe what you want to know. CMF will use your database context to generate and execute SQL.</p>
+                    </div>
+                </header>
+
+                <div class="chat-container" id="chat-container">
+                    
+                    <!-- Empty State -->
+                    <div class="empty-state" id="workspace-empty">
+                        <div class="empty-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                        </div>
+                        <h3>Your database is connected.</h3>
+                        <p>Start by asking a question about your data.</p>
+                        
+                        <div class="suggestion-chips">
+                            <button class="suggestion-chip">Top 5 customers by revenue</button>
+                            <button class="suggestion-chip">Show monthly sales trends</button>
+                            <button class="suggestion-chip">List recent incomplete orders</button>
+                        </div>
+                    </div>
+
+                    <!-- Chat History -->
+                    <div class="chat-history" id="chat-history">
+                        <!-- Messages injected here -->
+                    </div>
+                    
+                </div>
+
+                <div class="query-composer-wrapper">
+                    <div class="query-composer">
+                        <textarea id="query-input" placeholder="Ask anything about your database..." rows="1"></textarea>
+                        <div class="composer-actions">
+                            <div class="shortcut-hint">Press Enter ↵</div>
+                            <button id="btn-send-query" class="btn-primary icon-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Sidebar (Context Panel) -->
+            <aside class="sidebar-right collapsed" id="context-panel-wrapper">
+                <div class="sidebar-right-header">
+                    <h3>Context</h3>
+                    <button id="btn-close-context" class="btn-icon">×</button>
+                </div>
+                <div class="context-content">
+                    
+                    <div class="context-block">
+                        <div class="block-label">Context Retrieved</div>
+                        <ul class="retrieved-tables" id="context-tables-list">
+                            <li class="placeholder">Waiting for query...</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="context-block">
+                        <div class="block-label space-between">
+                            <span>Generated SQL</span>
+                            <button class="btn-text small" id="btn-copy-sql">Copy</button>
+                        </div>
+                        <div class="sql-viewer">
+                            <pre><code id="context-sql-code">/* SQL will appear here */</code></pre>
+                        </div>
+                        <div class="execution-meta" id="context-exec-meta">
+                            <!-- Execution time / rows will appear here -->
+                        </div>
+                    </div>
+
+                </div>
+            </aside>
+
+        </section>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
