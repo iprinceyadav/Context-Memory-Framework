@@ -9,18 +9,33 @@ ADMIN_ROLES = {"owner", "admin"}
 CONTRIBUTOR_ROLES = {"owner", "admin", "analyst"}
 
 
-def authorize_user(db: Session, organization_id: str, user_id: str) -> tuple[Organization, User]:
+def ensure_organization(db: Session, organization_id: str) -> Organization:
     org = db.query(Organization).filter(Organization.id == organization_id).first()
-    if not org:
-        if organization_id == "default-org":
-            org = Organization(id="default-org", name="Default Organization", domain="default.local")
-            db.add(org)
-            db.flush()
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organization not found",
-            )
+    if org:
+        return org
+    if organization_id != "default-org":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+    org = Organization(id="default-org", name="Default Organization", domain="default.local")
+    db.add(org)
+    db.flush()
+    return org
+
+
+def require_admin(db: Session, organization_id: str, user_id: str) -> User:
+    _, user = authorize_user(db, organization_id, user_id)
+    if user.role not in ADMIN_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an admin can do this.",
+        )
+    return user
+
+
+def authorize_user(db: Session, organization_id: str, user_id: str) -> tuple[Organization, User]:
+    org = ensure_organization(db, organization_id)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
