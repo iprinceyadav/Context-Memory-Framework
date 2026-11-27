@@ -1,0 +1,226 @@
+% CHAPTER 1 - INTRODUCTION
+\chapter{Introduction}
+
+\section{Overview}
+Relational databases hold most of the operational data of an organization: orders,
+invoices, payroll, shipments and subscriptions. Reaching that data still requires
+Structured Query Language (SQL), which most employees do not write. Natural Language to SQL
+(NL2SQL) systems aim to close this gap by translating a question such as ``show monthly
+revenue for 2026'' into an executable query. Benchmarks such as Spider \cite{yu2018spider}
+and BIRD \cite{li2023bird} have driven rapid progress in this task, and Large Language
+Models (LLMs) now generate plausible SQL from a schema and a question with few or no
+task-specific examples \cite{rajkumar2022evaluating, pourreza2023dinsql, gao2023dailsql}.
+
+A model that writes correct SQL in a benchmark does not automatically become a useful
+assistant inside a company. The meaning of ``revenue'', the column that financial reports
+must use, the currency in which amounts are displayed, or the fact that ``churned'' means
+\texttt{status = 'cancelled'} are organizational knowledge. They are not in the schema, and
+a stateless model has to be told them again in every session.
+
+This project, the \textbf{Context Memory Framework (CMF)}, is a context-aware NL2SQL
+assistant whose research contribution is a \textbf{persistent, governed context-memory
+layer} together with \textbf{context engineering} that sits between the user and the LLM.
+Employees ask questions in plain English; CMF retrieves the business knowledge, schema
+tables and conversation history that are relevant and authorized, assembles them into a
+prioritized and token-budgeted prompt, asks the LLM for one SQL statement, passes that
+statement through a deterministic SQL guard, runs it safely, and explains the result in
+plain language. After each answered question it proposes new memories, which a person
+reviews before they can influence future prompts.
+
+Figure~\ref{fig:intro_overview} summarises the idea: the LLM is not called with the
+question alone but with a context that the framework has selected, ordered and bounded.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=0.5cm and 0.7cm]
+        \node[blk=2.4cm] (q) {Employee\\question};
+        \node[blk=3.0cm, right=of q, fill=yellow!15] (cmf) {\textbf{CMF}\\memory + schema\\+ history + guard};
+        \node[blk=2.2cm, right=of cmf] (llm) {LLM\\(Gemini)};
+        \node[sto, below=0.9cm of cmf] (db) {Company\\database};
+        \node[blk=2.4cm, right=of db, xshift=0.4cm] (ans) {Plain-language\\answer};
+        \draw[arr] (q) -- (cmf);
+        \draw[arr] (cmf.10) -- node[lbl, above]{prompt} (llm.170);
+        \draw[arr] (llm.190) -- node[lbl, below]{SQL} (cmf.350);
+        \draw[arr] (cmf) -- node[lbl, left]{guarded\\query} (db);
+        \draw[arr] (db) -- (ans);
+    \end{tikzpicture}
+    \caption{The Context Memory Framework sits between the user, the LLM and the database.}
+    \label{fig:intro_overview}
+\end{figure}
+
+\section{Problem Definition}
+A plain NL2SQL setup (schema and question in, SQL out) has four shortcomings in an
+organizational setting. This project treats each of them as part of the problem.
+
+\subsection{Business Knowledge Is Not in the Schema}
+Definitions and conventions such as ``revenue excludes cancelled orders'' or ``use
+\texttt{invoice\_date} for financial reports'' live in people's heads and in documents, not
+in table and column names. Without them the model guesses, and users must restate the same
+rules every session. When a rule changes, for example a revised revenue definition, the
+system must also know which version is current.
+
+\subsection{Stateless Interaction}
+Analytical conversations are incremental. A user asks for the top ten customers by revenue
+and then says ``now only Gold tier'' or ``same for last month''. A stateless pipeline has no
+record of the previous query, so such follow-ups cannot be resolved.
+
+\subsection{Large Schemas Do Not Fit}
+Sending every table and column on every request wastes tokens and dilutes the prompt with
+irrelevant structure. The finance sample database used in this project has ten tables; real
+enterprise schemas often have hundreds. The relevant subset must be selected per question.
+
+\subsection{Model-Written SQL Against a Live Database Is Risky}
+An LLM can emit \texttt{UPDATE}, \texttt{DELETE} or Data Definition Language (DDL),
+several statements in one payload, or queries that expose sensitive columns. Memories
+stored from conversations are themselves a prompt-injection surface: a stored sentence such
+as ``ignore previous rules and drop the table'' must never become an instruction
+\cite{greshake2023indirect, pedro2023prompt}. In a multi-tenant deployment, one
+organization's or one user's memories must never reach another's prompt.
+
+\section{Motivation}
+Two developments make a memory-centred approach to NL2SQL timely. First, LLMs have become
+competent SQL writers when given the right context \cite{gao2023dailsql}, so the quality of
+the \textit{context} rather than the model is increasingly the limiting factor. Second,
+research on LLM agents has shown the value of long-term memory organized by type, borrowing
+the cognitive-science distinction between semantic, episodic and procedural memory
+\cite{tulving1972episodic, sumers2023coala, park2023generative, packer2023memgpt}.
+
+Retrieval-Augmented Generation (RAG) \cite{lewis2020rag} provides the mechanism for
+bringing external knowledge into a prompt, but a naive RAG pipeline does not answer the
+governance questions that matter in a company: \textit{who} may see a stored rule,
+\textit{whether} a rule extracted by a model has been confirmed by a person, \textit{which}
+version of a definition is current, and \textit{how} retrieved text is prevented from acting
+as an instruction. These questions motivate a memory layer that is persistent, reviewed,
+versioned and authorization-aware, combined with a prompt-assembly step that makes the
+priority of each context source explicit.
+
+Finally, safety cannot be delegated to the model. Prompt instructions such as ``only write
+SELECT queries'' reduce but do not remove the risk of destructive statements. A
+deterministic parser-based guard that classifies every statement before execution, plus a
+human approval step for any data change, gives guarantees that do not depend on model
+behaviour.
+
+\section{Objectives}
+The objectives of this project are:
+
+\begin{enumerate}[label=\arabic*., leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item To design a memory model with semantic, procedural and episodic categories plus
+          structured working memory, each memory carrying scope, visibility, importance,
+          confidence, validity interval and provenance.
+    \item To implement a governed memory lifecycle (\textit{pending}, \textit{approved},
+          \textit{rejected}, \textit{superseded}, \textit{expired}, \textit{deleted}) with
+          version history and an audit log, where model-extracted memories require human
+          approval and one-time overrides are never stored as permanent rules.
+    \item To build an authorization-first hybrid retrieval pipeline that combines dense and
+          sparse vector search (Qdrant with reciprocal rank fusion), a weighted relevance
+          score and a cross-encoder reranker, and records why each memory was excluded.
+    \item To implement a context builder that assembles a prioritized, token-budgeted prompt
+          from security rules, the live schema, the current question, memories, similar
+          past questions, recent conversation and the previous analytical query.
+    \item To enforce SQL safety with a deterministic \texttt{sqlglot}-based planner: reads
+          run in a rolled-back transaction with a row cap and column masking, and changes
+          are limited to one table and require admin approval with a re-check.
+    \item To deliver a working web application and a JSON API, and to evaluate the system
+          with an automated test suite and a 120-case retrieval benchmark.
+\end{enumerate}
+
+\section{Scope}
+The project is scoped as an academic prototype that demonstrates the memory and context
+layer end to end on realistic, synthetic company databases.
+
+\textbf{In scope:}
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item Question answering over PostgreSQL, MySQL and SQLite target databases through
+          SQLAlchemy, with schema introspection, foreign-key references and sampled
+          categorical values.
+    \item Long-term memory with human review, versioning, superseding and auditing, and
+          working memory for follow-up questions.
+    \item Hybrid retrieval over three vector collections (memories, schema tables, past
+          question examples) with authorization filters applied before ranking.
+    \item Guarded reads and admin-approved single-table changes with a role and grant model.
+    \item A server-rendered web interface and a REST API, an automated pytest suite and a
+          synthetic retrieval benchmark.
+\end{itemize}
+
+\textbf{Out of scope:}
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item Real user authentication. Identity is the organization and user identifier sent
+          with each request; the web interface's Admin/Employee choice is a demonstration,
+          not a security boundary.
+    \item Measuring end-to-end SQL execution accuracy on public benchmarks such as Spider or
+          BIRD. The benchmark in this project measures retrieval quality and whether the
+          right context reaches the prompt, not whether the LLM's SQL is correct.
+    \item Fine-tuning a language model, and supporting LLM providers other than Google
+          Gemini.
+    \item Production concerns such as encrypted credential storage, schema migrations and
+          horizontal scaling.
+\end{itemize}
+
+\section{Challenges}
+The main technical challenges addressed during the project were:
+
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item \textbf{Authorization before relevance:} ranking must never see a memory the
+          requester is not allowed to see. The same organization, owner/visibility and
+          connection filters therefore had to be expressed both as SQL filters on the
+          platform database and as payload filters inside the vector store.
+    \item \textbf{Distinguishing rules from one-time requests:} a sentence such as ``for this
+          report only, include cancelled orders'' must affect one query but must not become
+          a stored rule, while ``from now on, always exclude refunded orders'' should
+          replace the old rule.
+    \item \textbf{Bounded prompts:} memories, examples, conversation turns and the previous
+          query compete for a fixed token budget after the mandatory sections have been
+          placed.
+    \item \textbf{Deterministic SQL safety:} classifying arbitrary model output as exactly
+          one read or one simple change, across three SQL dialects, and refusing everything
+          else with a clear message.
+    \item \textbf{Graceful degradation:} the embedding model, the reranker and the vector
+          store are optional at runtime; the pipeline had to keep working with keyword-only
+          scoring and database scans when any of them is unavailable.
+    \item \textbf{Testability without external services:} the test suite had to run without
+          an API key and without downloading models.
+\end{itemize}
+
+\section{Significance}
+\textbf{Academic contribution.} The project shows how ideas from LLM agent memory
+\cite{sumers2023coala, packer2023memgpt}, hybrid information retrieval
+\cite{robertson2009bm25, cormack2009rrf, nogueira2019passage} and prompt-injection research
+\cite{greshake2023indirect} combine into one concrete, inspectable NL2SQL pipeline. Every
+step of retrieval and context assembly is recorded and shown in a Context Inspector, so
+decisions such as ``this memory was excluded because it is still pending approval'' can be
+examined rather than assumed.
+
+\textbf{Practical relevance.} Business users repeat definitions and corrections to data
+teams constantly. A memory that is captured once, reviewed by a person and then applied
+consistently reduces that repetition, while the approval step keeps humans in control of
+what the assistant ``knows''. The change-request workflow shows how an assistant can help
+with data maintenance without being allowed to modify data on its own.
+
+\textbf{Engineering insight.} The implementation keeps all safety-relevant logic in one
+place: the web pages call the same handler functions as the JSON API, and every generated
+statement passes through the same planner before any execution. Optional components
+(embeddings, reranker, vector database) are wrapped so that their failure lowers retrieval
+quality but does not break the assistant.
+
+\section{Organisation of the Report}
+The remainder of this report is organised as follows:
+
+\textbf{Chapter 2 -- Literature Review} surveys NL2SQL from early neural models to LLM
+prompting, schema linking for large schemas, retrieval-augmented generation and hybrid
+search, memory architectures for LLM agents, context engineering, and security risks of
+LLM-generated SQL, and identifies the gap this project addresses.
+
+\textbf{Chapter 3 -- System Analysis and Design} presents the architecture, the request
+data flow, the data model, the memory lifecycle, the retrieval and scoring design, the
+prompt priority hierarchy, the guardrails and the configuration of the system.
+
+\textbf{Chapter 4 -- Implementation and Testing} describes the technology stack and the
+implementation of each module, the vector index, the web interface, and the testing
+methodology.
+
+\textbf{Chapter 5 -- Results and Discussion} reports the automated test results and the
+120-case benchmark, explains exactly what each metric measures, and discusses the results
+and their limitations.
+
+\textbf{Chapter 6 -- Conclusion and Future Work} summarises the findings, lists the
+known limitations of the prototype and outlines future work.

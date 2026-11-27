@@ -1,0 +1,43 @@
+{% import "partials/macros.html" as ui %}
+{% if result.outcome == "change_requested" and result.change_request %}
+<div class="msg-label">{{ "Change" if ws.is_admin else "Sent for approval" }}</div>
+<div class="nl-answer">{{ result.natural_response }}</div>
+{{ ui.change_card(result.change_request, ws.is_admin) }}
+{% elif result.outcome == "not_allowed" and not ws.can_request_changes %}
+<div class="msg-label">Read-only</div>
+<div class="notice-msg">{{ ws.user_type_label }} is read-only.</div>
+{% elif result.outcome in ("not_allowed", "no_match") %}
+<div class="msg-label">{{ "Nothing to change" if result.outcome == "no_match" else "Not allowed" }}</div>
+<div class="notice-msg">{{ result.natural_response }}</div>
+{% else %}
+<div class="msg-label">Answer</div>
+<div class="nl-answer">{{ result.natural_response }}</div>
+{% if result.context_used %}
+{% set used = result.context_used %}
+{% set memory_count = used.memories | length %}
+<details class="context-used-box">
+    <summary class="context-used-toggle">
+        <span>Context · {{ memory_count }} {{ plural(memory_count, "memory", "memories") }} · {{ used.tokens_used }} tok</span>
+        <span class="toggle-arrow">▸</span>
+    </summary>
+    <div class="context-used-body">
+        {% for memory in used.memories %}
+        <div class="cu-mem-item">
+            <span class="badge badge-{{ memory.type }}">{{ memory.type }}</span>
+            <span class="cu-mem-text">{{ memory.content }}</span>
+            <span class="cu-mem-score">{{ "%.2f" | format(memory.score) }}</span>
+        </div>
+        {% else %}
+        <div class="cu-empty">Schema only</div>
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+{{ ui.result_table(result.data) }}
+{% if result.truncated or result.hidden_columns %}
+<div class="result-note">
+    {%- if result.truncated %}First {{ (result.data or []) | length }} rows. {% endif %}
+    {%- if result.hidden_columns %}Masked: {{ result.hidden_columns | join(", ") }}{% endif -%}
+</div>
+{% endif %}
+{% endif %}

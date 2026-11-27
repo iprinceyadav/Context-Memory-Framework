@@ -1,0 +1,7 @@
+<div id="conversations-list" class="conversations-list"{% if oob %} hx-swap-oob="true"{% endif %}>
+    {% for conversation in ws.conversations() %}
+    <a class="conv-item{% if conversation.id == conversation_id %} active{% endif %}" href="/chat?conversation={{ conversation.id | urlencode }}">{{ conversation.title or "Conversation" }}</a>
+    {% else %}
+    <div class="schema-placeholder">None yet</div>
+    {% endfor %}
+</div>

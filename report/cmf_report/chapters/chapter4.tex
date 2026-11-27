@@ -1,0 +1,263 @@
+% CHAPTER 4 - IMPLEMENTATION AND TESTING
+\chapter{Implementation and Testing}
+
+\section{Tools and Technologies}
+The implementation stack was chosen for clarity, type safety and the ability to run the
+whole system on one development machine:
+
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item \textbf{FastAPI} \cite{fastapi}: request routing, dependency injection for database
+          sessions, background tasks for memory extraction, automatic OpenAPI documentation,
+          and a lifespan hook that checks the vector index at start-up.
+    \item \textbf{SQLAlchemy 2} \cite{sqlalchemydocs}: declarative models for the platform
+          database, and engines plus schema inspection for PostgreSQL, MySQL and SQLite target
+          databases.
+    \item \textbf{Pydantic v2 and pydantic-settings} \cite{pydanticdocs}: request and response
+          schemas, validation of extracted memories, and typed configuration loaded from
+          \texttt{.env}.
+    \item \textbf{sqlglot} \cite{sqlglotdocs}: dialect-aware SQL parsing for the statement
+          planner, and safe construction of preview and sampling queries.
+    \item \textbf{sentence-transformers} \cite{sbertdocs}: the \texttt{all-MiniLM-L6-v2}
+          embedding model and the \texttt{ms-marco-MiniLM-L-6-v2} cross-encoder, both loaded
+          lazily on first use.
+    \item \textbf{Qdrant} \cite{qdrantdocs} through \texttt{qdrant-client}: three collections
+          with named dense and sparse vectors and server-side reciprocal rank fusion, embedded
+          on disk at \texttt{./vector\_store} unless \texttt{VECTOR\_STORE\_URL} is set.
+    \item \textbf{Google Gemini} \cite{geminidocs} through \texttt{google-generativeai}:
+          separate model names for SQL generation, answer writing and memory extraction.
+    \item \textbf{Jinja2 and htmx} \cite{htmxdocs}: server-rendered pages with partial
+          updates; the only custom JavaScript (47 lines) handles panel toggling,
+          Enter-to-send, copying SQL and closing modals.
+    \item \textbf{pytest} \cite{pytestdocs} with FastAPI's test client for automated tests.
+\end{itemize}
+
+\section{Request Pipeline Implementation}
+The \texttt{ask} handler in \texttt{app/api/chat.py} implements the flow of
+Figure~\ref{fig:dataflow}. It validates that the question is not empty, authorizes the
+user, resolves the target database and conversation, and stores the user message before
+any LLM call so that the turn is never lost. Context building is wrapped in a
+\texttt{try} block: if it fails, the handler logs a warning and calls a schema-only SQL
+prompt instead, so a retrieval failure degrades quality but does not break the answer.
+
+After SQL generation the handler calls \texttt{plan\_sql}. Refused statements return the
+outcome \texttt{not\_allowed} with the planner's message; change statements are passed to
+the change service; reads are executed by the connector. The answer is written by the
+summary model, and if that call fails the handler falls back to \texttt{describe\_results},
+which reports the row count and totals and averages of numeric columns. Finally the handler
+saves the assistant message with its context trace, saves a \texttt{QueryMemory} whose SQL
+template has string literals replaced by \texttt{'?'}, indexes it as an example, and
+schedules memory extraction as a FastAPI background task.
+
+Listing~\ref{lst:read} shows how reads are executed. The transaction is rolled back in a
+\texttt{finally} block whatever the statement did, and one extra row is fetched to detect
+truncation.
+
+\begin{lstlisting}[language=Python, caption={Guarded read in \texttt{DatabaseConnector}}, label={lst:read}]
+def read(self, engine: Engine, query: str, max_rows: int) -> tuple[list[dict], bool]:
+    with engine.connect() as conn:
+        transaction = conn.begin()
+        try:
+            result = conn.execute(text(query))
+            if not result.returns_rows:
+                return [], False
+            columns = list(result.keys())
+            fetched = result.fetchmany(max_rows + 1)
+            rows = [dict(zip(columns, row)) for row in fetched[:max_rows]]
+            return rows, len(fetched) > max_rows
+        finally:
+            transaction.rollback()
+\end{lstlisting}
+
+\subsection{Schema Introspection}
+When a database is connected or first queried, the connector inspects every table's
+columns and foreign keys and records each foreign key as a \texttt{references} entry such as
+\texttt{customers.id}. It then samples distinct values of text columns (at most 200 tables,
+12 columns per table, scanning 1,000 rows), skipping foreign-key and sensitive columns, and
+keeps the list only if there are at most 20 distinct values of at most 40 characters each.
+These values appear in the prompt (for example \texttt{status: delivered | pending |
+shipped}), which helps the model write correct filter literals. The schema is cached under
+the SHA-256 fingerprint of the connection identity and indexed into the
+\texttt{schema\_tables} collection.
+
+\section{Memory Store and Extraction}
+
+\subsection{Memory Store}
+\texttt{MemoryStore} implements creation, update, approval, rejection, expiry, superseding,
+deletion, listing, statistics, version history and audit trail. Every operation first loads
+the memory through an authorization check that returns HTTP 404 for unknown or deleted
+memories and HTTP 403 for memories of another organization or another user's personal
+memory. Creation checks for duplicates (identical normalized text or cosine similarity of
+at least 0.96 with an active memory of the same user) and returns the existing memory
+instead of creating a new one. Every state change is committed together with an audit
+entry and then synchronized to the vector index, which keeps \texttt{approved},
+\texttt{pending} and \texttt{superseded} memories and removes the others.
+
+\subsection{Extraction}
+\texttt{MemoryExtractor} sends the last user and assistant turn to the extraction model
+with a prompt that defines the three memory types, forbids storing result rows, sensitive
+values or credentials, forbids inferring rules only from generated SQL, and asks for strict
+JSON. The response is parsed, invalid items are dropped, types, scopes and visibilities are
+normalized to allowed values, and each item is validated with the \texttt{ExtractedMemory}
+Pydantic model. Listing~\ref{lst:override} shows the override check that runs before the
+LLM is called.
+
+\begin{lstlisting}[language=Python, caption={One-time override check in \texttt{MemoryExtractor.extract}}, label={lst:override}]
+latest_message = user_texts[-1]
+if is_override(latest_message) and not is_rule_change(latest_message):
+    logger.info("Detected one-query temporary override; skipping permanent rule extraction.")
+    return []
+\end{lstlisting}
+
+During ingestion, an item marked as a correction with a subject triggers a conflict search:
+approved or pending memories of the same user with the same subject whose embedding
+similarity to the new content is below 0.85 are treated as contradicted. The first such
+memory is superseded by the new one, which stays pending until reviewed.
+
+\section{Hybrid Retrieval and the RAG Index}
+
+\subsection{Vector Store}
+\texttt{VectorStore} wraps the Qdrant client behind a lock and creates collections lazily
+with a named 384-dimensional cosine dense vector and a named sparse vector with the IDF
+modifier. Sparse vectors are built in \texttt{text.py}: each term is mapped to an index by
+the first eight hex digits of its MD5 hash, and document term weights follow the BM25
+saturation $tf\,(k_1+1)/(tf+k_1)$ with $k_1 = 1.2$, while query terms have weight 1. A
+search issues one dense and one sparse prefetch with the same payload filter and fuses them
+with \texttt{Fusion.RRF}. If the client cannot be created, the store reports itself
+unavailable and every caller falls back to database scans.
+
+\subsection{Index Synchronization}
+\texttt{indexer.py} keeps three collections consistent with the platform database:
+\texttt{memories} is updated on every memory change, \texttt{schema\_tables} receives one
+point per table on schema sync (with a deterministic UUIDv5 identifier), and
+\texttt{query\_examples} receives each successfully answered question with its masked SQL.
+On start-up, \texttt{ensure\_index} compares each collection's point count with the
+expected number of rows and rebuilds any collection that differs.
+
+\subsection{Ranking}
+The \texttt{MemoryRetriever.rank} method applies authorization filters, fetches vector
+candidates, applies status and validity checks, removes duplicate content, computes the five
+sub-scores of Section~3.5 and calls the reranker. Listing~\ref{lst:rerank} shows the
+combination of the reranker score with the first-stage score.
+
+\begin{lstlisting}[language=Python, caption={Combining the cross-encoder score with the first-stage score}, label={lst:rerank}]
+weight = settings.RERANK_WEIGHT
+for item, score in zip(scored, scores):
+    item["first_stage_score"] = item["combined_score"]
+    item["rerank_score"] = round(score, 4)
+    item["combined_score"] = round(weight * score + (1 - weight) * item["combined_score"], 4)
+\end{lstlisting}
+
+Both the embedder and the reranker are wrapped in provider classes that can be replaced at
+runtime. The test configuration replaces them with a deterministic 64-dimensional hash
+embedder and a token-overlap scorer.
+
+\section{Context Builder}
+\texttt{ContextBuilder.build} returns the final prompt together with a
+\texttt{context\_debug} record containing every retrieved memory with its five sub-scores
+and rerank score, every excluded memory with its reason, the token budget and tokens used,
+the selected schema tables and selection mode, the retrieval query actually used, the vector
+store mode, and the examples included. This record is stored with the assistant message and
+is what the Context Inspector displays. A second method builds the answer prompt: it
+includes at most 20 result rows, per-column statistics (minimum, maximum, total and average
+for numeric columns; distinct count and most common values otherwise), the business
+definitions and preferences that were applied, and the list of masked columns, and asks for
+one direct sentence followed by at most three insights without mentioning SQL.
+
+\section{SQL Guard and Change Service}
+\texttt{plan\_sql} returns a \texttt{SqlPlan} with the cleaned SQL, the kind
+(\texttt{read}, \texttt{update}, \texttt{insert} or \texttt{delete}), the tables, the
+target table and the parsed statement, or an error message. Listing~\ref{lst:plan} shows
+the checks applied to updates and deletes.
+
+\begin{lstlisting}[language=Python, caption={Checks for \texttt{UPDATE} and \texttt{DELETE} in \texttt{plan\_sql}}, label={lst:plan}]
+if kind in ("update", "delete"):
+    if statement.args.get("from") or statement.args.get("joins") or statement.args.get("using"):
+        plan.error = "Changes that join other tables aren't supported. Name the rows directly."
+        return plan
+    if not statement.args.get("where"):
+        plan.error = f"Refusing to {kind} every row in {plan.target}. Say which rows to change."
+        return plan
+\end{lstlisting}
+
+\texttt{ChangeService.propose} refuses the change if data changes are disabled, if there is
+no saved connection, or if the user lacks permission. It builds a \texttt{COUNT(*)} query and
+a five-row sample query with the same \texttt{WHERE} condition using sqlglot (for inserts it
+counts the listed \texttt{VALUES} or the rows of the source query), refuses zero-row and
+over-limit changes, masks the sample for non-admins and stores the request. \texttt{approve}
+re-plans the stored SQL, recounts, and calls \texttt{connector.write}, which raises
+\texttt{RowCountMismatch} and rolls back if the driver reports a different number of
+affected rows. Failures are stored on the request with status \texttt{failed}.
+
+\section{Web Interface}
+The web interface has a landing page where the visitor chooses to act as an Admin (may
+request and apply changes) or an Employee (read-only; sensitive columns hidden), followed by
+the database connection page, the SQL Assistant, the Memories dashboard, the Context
+Inspector, the Knowledge page and the Evaluation page. State is held in three HTTP-only
+cookies: the acting user, the saved connection and the last conversation. htmx requests
+receive HTML fragments, and out-of-band swaps refresh the context panel, the conversation
+list and the pending-memory badge. SQLite files can be uploaded (they must start with the
+SQLite header and be at most 50\,MB) and are stored under \texttt{UPLOAD\_DIR} with a random
+suffix. Figures~\ref{fig:ui_landing}--\ref{fig:ui_knowledge} are screenshots of the running
+application.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.48\textwidth}{ui_landing.png}{Landing page: choosing the Admin or Employee user type.}{fig:ui_landing}\hfill
+    \figimg{0.48\textwidth}{ui_connect.png}{Database connection page (by path or upload).}{fig:ui_connect}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.48\textwidth}{ui_chat_change.png}{SQL Assistant workspace on the retail sample database.}{fig:ui_chat_empty}\hfill
+    \figimg{0.48\textwidth}{ui_knowledge.png}{Knowledge page for entering a business rule manually.}{fig:ui_knowledge}
+\end{figure}
+
+The JSON API is documented automatically by FastAPI (Figure~\ref{fig:ui_swagger}); the full
+endpoint list is given in Appendix~\ref{app:api}.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.52\textwidth}{ui_swagger.png}{Automatically generated OpenAPI documentation of the JSON API.}{fig:ui_swagger}
+\end{figure}
+
+\section{Testing Methodology}
+
+\subsection{Test Environment}
+The automated tests in \texttt{tests/} run without network access, API keys or model
+downloads. Fixtures in \texttt{conftest.py} replace the embedding model with a
+64-dimensional hash embedder, the reranker with a token-overlap scorer and Qdrant with an
+in-memory instance, and use an in-memory SQLite platform database. All LLM calls are
+patched with fixed responses. The fixtures provide two organizations, users with different
+roles and two database connections, which are used for isolation tests.
+
+\subsection{Test Suite}
+Table~\ref{tab:tests} summarises the suite. In total pytest collects 64 test cases in ten
+files.
+
+\begin{table}[H]
+    \centering
+    \caption{Automated Test Suite}
+    \small
+    \begin{tabular}{p{4.3cm} p{0.9cm} p{8.2cm}}
+        \toprule
+        \textbf{File} & \textbf{Tests} & \textbf{What is verified} \\
+        \midrule
+        \texttt{test\_pages.py}           & 19 & All pages render; upload accepts SQLite and rejects other files; chat renders answer and context; memory approval; change-request flow; first visit asks for user type; Employee is read-only. \\[3pt]
+        \texttt{test\_changes.py}         & 12 & Planner classification; permission refusal; grant per table and action; approval required; rejected requests change nothing; approval stops if data changed; revoked grants; unsafe and oversized changes; masking and row cap; inserts and deletes. \\[3pt]
+        \texttt{test\_memory\_store.py}   &  6 & Pending default; cross-org denial; versioning; approve/reject/delete; supersede; listing and statistics. \\[3pt]
+        \texttt{test\_rag\_pipeline.py}   &  6 & Follow-up detection and rewritten retrieval; vector table search for large schemas; examples indexed and not shared between users; stale index rebuilt at start-up. \\[3pt]
+        \texttt{test\_security.py}        &  6 & Cross-tenant, cross-user and connection isolation; viewer cannot share; SQL guard blocks writes; delete clears embedding. \\[3pt]
+        \texttt{test\_failures.py}        &  4 & Extraction failure returns empty; chat survives retrieval failure; missing memory returns 404; code fences stripped. \\[3pt]
+        \texttt{test\_retrieval.py}       &  4 & Only approved memories returned; inactive excluded; superseded recall; duplicates and conflicts. \\[3pt]
+        \texttt{test\_extraction.py}      &  3 & One-time override not extracted; definition extracted; rule change detected. \\[3pt]
+        \texttt{test\_api.py}             &  2 & End-to-end API demonstration flows; evaluation results endpoint. \\[3pt]
+        \texttt{test\_context\_builder.py}&  2 & All prompt sections combined; token budget respected. \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:tests}
+\end{table}
+
+\subsection{Retrieval Benchmark}
+In addition to the functional tests, \texttt{tests/run\_evaluation.py} builds a synthetic
+dataset of 120 cases and measures retrieval and context assembly with the real MiniLM
+embedder. Its design and results are presented in Chapter~5.

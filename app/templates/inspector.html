@@ -1,0 +1,62 @@
+{% extends "workspace.html" %}
+{% block title %}Inspector · CMF{% endblock %}
+{% block main %}
+<header class="workspace-header">
+    <h2>Inspector</h2>
+</header>
+<div class="dashboard-body">
+    {% if not debug %}
+    <div class="schema-placeholder">Ask something first.</div>
+    {% else %}
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Used</div><div class="stat-value">{{ debug.retrieved_memories | length }}</div></div>
+        <div class="stat-card"><div class="stat-label">Excluded</div><div class="stat-value">{{ debug.excluded_memories | length }}</div></div>
+        <div class="stat-card"><div class="stat-label">Tokens</div><div class="stat-value">{{ debug.tokens_used }} / {{ debug.token_budget }}</div></div>
+        <div class="stat-card"><div class="stat-label">Turns</div><div class="stat-value">{{ debug.conversation_turns }}</div></div>
+    </div>
+    <div class="detail-section">
+        <div class="block-label">Query</div>
+        <div class="detail-content-box">{{ debug.query }}</div>
+    </div>
+    <div class="detail-section">
+        <div class="block-label">Memories</div>
+        {% if debug.retrieved_memories %}
+        <div class="result-table-wrapper">
+            <table class="result-table">
+                <thead><tr><th>Type</th><th>Content</th><th>Vector</th><th>Keyword</th><th>Recency</th><th>Weight</th><th>Type</th><th>Rerank</th><th>Final</th></tr></thead>
+                <tbody>
+                    {% for m in debug.retrieved_memories %}
+                    <tr>
+                        <td><span class="badge badge-{{ m.get('memory_type') }}">{{ m.get("memory_type") }}</span></td>
+                        <td class="wrap-cell">{{ m.get("content") }}</td>
+                        <td>{{ m.get("vector_similarity") }}</td>
+                        <td>{{ m.get("keyword_relevance") }}</td>
+                        <td>{{ m.get("recency_score") }}</td>
+                        <td>{{ m.get("importance_score") }}</td>
+                        <td>{{ m.get("type_relevance") }}</td>
+                        <td>{{ m.get("rerank_score") if m.get("rerank_score") is not none else "—" }}</td>
+                        <td><strong>{{ m.get("combined_score") }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="schema-placeholder">None</div>
+        {% endif %}
+    </div>
+    <div class="detail-section">
+        <div class="block-label">Excluded ({{ debug.excluded_memories | length }})</div>
+        {% for e in debug.excluded_memories %}
+        <div class="version-row"><span class="badge">{{ e.get("reason") }}</span><span>{{ e.get("content") }}</span></div>
+        {% else %}
+        <div class="schema-placeholder">None</div>
+        {% endfor %}
+    </div>
+    <div class="detail-section">
+        <div class="block-label">Prompt</div>
+        <div class="sql-viewer"><pre><code>{{ debug.final_prompt_preview or "" }}</code></pre></div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

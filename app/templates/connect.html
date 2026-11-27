@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Connect · CMF{% endblock %}
+{% block body %}
+<section id="view-connect" class="view-section">
+    <div class="connect-modal">
+        <div class="modal-header">
+            <h2>Connect</h2>
+        </div>
+        <div class="modal-body" id="connect-body">
+            {% if not db_type %}
+            <div class="connect-step">
+                <div class="db-options">
+                    {% for key, description in [("postgresql", "Server"), ("mysql", "Server"), ("sqlite", "File")] %}
+                    <a class="db-option" href="/connect?db={{ key }}" data-db="{{ key }}">
+                        <div class="db-icon">{{ DB_BADGES[key] }}</div>
+                        <div class="db-info">
+                            <h3>{{ DB_LABELS[key] }}</h3>
+                            <p>{{ description }}</p>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                <div class="modal-actions">
+                    <a href="/" class="btn-secondary">Cancel</a>
+                </div>
+            </div>
+            {% else %}
+            <div class="connect-step">
+                <div class="selected-db-indicator">
+                    <span id="selected-db-name">{{ DB_LABELS[db_type] }}</span>
+                    <a href="/connect" class="btn-text">Change</a>
+                </div>
+
+                <div class="sync-loader sync-pending">
+                    <div class="spinner"></div>
+                    <p class="text-muted">Syncing…</p>
+                </div>
+
+                <div id="sync-status"></div>
+
+                {% if db_type == "sqlite" %}
+                <form id="upload-form" class="upload-form" hx-post="/connect/upload" hx-encoding="multipart/form-data" hx-target="#sync-status" hx-indicator="#connect-body" hx-disabled-elt="find button">
+                    <div class="form-group">
+                        <label for="database-file">File · max 50 MB</label>
+                        <input type="file" id="database-file" name="database_file" accept=".db,.sqlite,.sqlite3" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-primary">Upload</button>
+                    </div>
+                    <div class="upload-divider">or path</div>
+                </form>
+                {% endif %}
+
+                <form id="connection-form" hx-post="/connect" hx-target="#sync-status" hx-indicator="#connect-body" hx-disabled-elt="find button[type=submit]">
+                    <input type="hidden" name="db_type" value="{{ db_type }}">
+                    {% if db_type == "sqlite" %}
+                    <div class="form-group">
+                        <label for="sqlite-path">Path</label>
+                        <input type="text" id="sqlite-path" name="sqlite_path" placeholder="sales_demo.db" required>
+                    </div>
+                    {% else %}
+                    <div class="form-group">
+                        <label for="db-host">Host</label>
+                        <input type="text" id="db-host" name="host" placeholder="localhost" value="localhost" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="db-port">Port</label>
+                            <input type="number" id="db-port" name="port" value="{{ 3306 if db_type == 'mysql' else 5432 }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="db-name">Database</label>
+                            <input type="text" id="db-name" name="database_name" placeholder="{{ 'mysql' if db_type == 'mysql' else 'postgres' }}" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="db-user">Username</label>
+                            <input type="text" id="db-user" name="username" placeholder="{{ 'root' if db_type == 'mysql' else 'postgres' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="db-pass">Password</label>
+                            <input type="password" id="db-pass" name="password" placeholder="••••••••" required>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if db_type != "sqlite" %}
+                    <div class="security-notice">Stored base64, not encrypted.</div>
+                    {% endif %}
+
+                    <div class="modal-actions space-between">
+                        <div class="test-connection">
+                            <button type="button" class="btn-secondary" hx-post="/connect/test" hx-include="closest form" hx-target="#test-result" hx-disabled-elt="this">Test</button>
+                            <span id="test-result" class="test-result"></span>
+                        </div>
+                        <button type="submit" class="btn-primary">Connect</button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

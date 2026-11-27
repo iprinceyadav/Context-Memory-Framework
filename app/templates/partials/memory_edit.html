@@ -1,0 +1,8 @@
+<form class="memory-card memory-edit" id="memory-{{ memory.id }}" hx-post="/memories/{{ memory.id }}/edit" hx-include="#memory-toolbar" hx-target="#memory-panel">
+    <div class="block-label">Edit</div>
+    <textarea name="content" rows="3" required aria-label="Memory content">{{ memory.content }}</textarea>
+    <div class="memory-actions">
+        <button type="submit" class="btn-approve">Save</button>
+        <button type="button" class="btn-text small" hx-get="/memories/panel" hx-include="#memory-toolbar" hx-target="#memory-panel">Cancel</button>
+    </div>
+</form>

@@ -1,0 +1,7 @@
+{% set stats = ws.memory_stats() %}
+<div class="stats-grid" id="memory-stats-grid"{% if with_badges %} hx-swap-oob="true"{% endif %}>
+    <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="stat-total">{{ stats.total }}</div></div>
+    <div class="stat-card"><div class="stat-label">Active</div><div class="stat-value text-success" id="stat-active">{{ stats.active }}</div></div>
+    <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value text-warning" id="stat-pending">{{ stats.pending }}</div></div>
+    <div class="stat-card"><div class="stat-label">Superseded</div><div class="stat-value" id="stat-superseded">{{ stats.superseded }}</div></div>
+</div>

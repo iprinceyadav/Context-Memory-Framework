@@ -15,11 +15,11 @@ class FailingEmbeddingProvider(EmbeddingProvider):
 
 def test_extraction_failure_returns_empty():
     store = MemoryExtractor()
-    with patch("app.services.extraction.llm.generate", side_effect=RuntimeError("API down")):
+    with patch("app.services.extraction.llm.extract", side_effect=RuntimeError("API down")):
         found = store.extract([{"role": "user", "content": "Revenue excludes cancelled."}], "u1", "o1")
         assert found == []
 
-    with patch("app.services.extraction.llm.generate", return_value="not valid json {{"):
+    with patch("app.services.extraction.llm.extract", return_value="not valid json {{"):
         found = store.extract([{"role": "user", "content": "Revenue excludes cancelled."}], "u1", "o1")
         assert found == []
 
@@ -52,3 +52,11 @@ def test_chat_survives_retrieval_failure(client, tmp_path):
 def test_missing_memory_returns_404(client):
     response = client.get("/api/memories/non-existent-id?organization_id=default-org&user_id=default-user")
     assert response.status_code == 404
+
+
+def test_llm_strips_any_code_fence():
+    from app.services.llm import llm
+
+    assert llm._strip_fences("```sqlite\nSELECT 1\n```") == "SELECT 1"
+    assert llm._strip_fences("```sql SELECT 2 ```") == "SELECT 2"
+    assert llm._strip_fences("SELECT 3") == "SELECT 3"

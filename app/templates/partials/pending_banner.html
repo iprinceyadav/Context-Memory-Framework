@@ -1,0 +1,11 @@
+{% import "partials/macros.html" as ui %}
+{% set stats = ws.memory_stats() %}
+{% if stats.pending %}
+<div class="pending-banner" id="pending-memory-banner">
+    <span>{{ stats.pending }} {{ plural(stats.pending, "memory", "memories") }} to review</span>
+    <a href="/memories?status=pending" class="btn-text small accent-link">Review →</a>
+</div>
+{% endif %}
+{% if with_badges %}
+{{ ui.memories_badge(stats.pending, True) }}
+{% endif %}

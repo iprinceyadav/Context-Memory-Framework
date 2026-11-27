@@ -1,0 +1,50 @@
+{% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+<form id="knowledge-form" class="knowledge-form" hx-post="/knowledge" hx-target="#knowledge-body">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="bk-type">Type</label>
+            <select id="bk-type" name="memory_type">
+                {% for value, label in [("semantic", "Definition"), ("procedural", "Rule"), ("episodic", "Note")] %}
+                <option value="{{ value }}"{% if form.memory_type == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="bk-subject">Key</label>
+            <input type="text" id="bk-subject" name="subject" value="{{ form.subject }}" placeholder="revenue" required>
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="bk-content">Content</label>
+        <textarea id="bk-content" name="content" rows="3" placeholder="Revenue excludes cancelled orders." required>{{ form.content }}</textarea>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label for="bk-scope">Scope</label>
+            <select id="bk-scope" name="scope">
+                {% for value, label in [("connection", "This database"), ("personal", "Me"), ("organization", "Org")] %}
+                <option value="{{ value }}"{% if form.scope == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="bk-visibility">Visibility</label>
+            <select id="bk-visibility" name="visibility">
+                {% for value, label in [("personal", "Private"), ("shared", "Shared")] %}
+                <option value="{{ value }}"{% if form.visibility == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="bk-importance">Weight</label>
+            <input type="number" id="bk-importance" name="importance" min="1" max="10" value="{{ form.importance }}">
+        </div>
+    </div>
+    <div class="form-group checkbox-row">
+        <input type="checkbox" id="bk-auto-approve" name="auto_approve" value="1"{% if form.auto_approve %} checked{% endif %}>
+        <label for="bk-auto-approve">Activate now</label>
+    </div>
+    <div class="modal-actions">
+        <button type="submit" class="btn-primary">Save</button>
+    </div>
+</form>

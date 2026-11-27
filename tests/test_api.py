@@ -59,7 +59,9 @@ def test_end_to_end_demos(client, tmp_path):
             return "SELECT SUM(amount) AS revenue FROM orders WHERE status NOT IN ('cancelled', 'refunded')"
         return "SELECT SUM(amount) AS revenue FROM orders"
 
-    with patch("app.services.llm.llm.generate", side_effect=fake_generate):
+    with patch("app.services.llm.llm.generate", side_effect=fake_generate), patch(
+        "app.services.llm.llm.extract", side_effect=fake_generate
+    ):
         with patch("app.services.llm.llm.summarize", return_value="Done."):
             r1 = client.post(
                 "/api/chat/ask",
@@ -89,7 +91,7 @@ def test_end_to_end_demos(client, tmp_path):
         captured_prompts.append(prompt)
         if "include cancelled" in prompt.lower():
             return "SELECT SUM(amount) AS revenue FROM orders"
-        if "Delhi" in prompt and "PREVIOUS ANALYTICAL CONTEXT" in prompt:
+        if "Delhi" in prompt.split("CURRENT QUESTION:")[-1] and "Previous Question:" in prompt:
             return "SELECT c.name, SUM(o.amount) AS rev FROM customers c JOIN orders o ON c.id=o.customer_id WHERE c.city = 'Delhi' AND o.status != 'cancelled' GROUP BY c.name"
         if "exclude cancelled orders" in prompt:
             return "SELECT SUM(amount) AS revenue FROM orders WHERE status != 'cancelled'"

@@ -1,0 +1,20 @@
+{% import "partials/macros.html" as ui %}
+<div class="message msg-user"><div class="msg-content">{{ question }}</div></div>
+<div class="message msg-bot">
+    <div class="msg-content">
+        {% if error %}
+        <div class="msg-label error-label">Failed</div>
+        <div class="error-msg">{{ error }}</div>
+        {% else %}
+        {% include "partials/assistant_reply.html" %}
+        {% endif %}
+    </div>
+</div>
+<div id="workspace-empty" hx-swap-oob="delete"></div>
+{% if result %}
+{% set oob = True %}
+{% include "partials/context_panel.html" %}
+{% include "partials/conversation_list.html" %}
+{% include "partials/conversation_input.html" %}
+<div id="pending-banner-slot" hx-swap-oob="true" hx-get="/fragments/pending-banner" hx-trigger="load delay:1500ms"></div>
+{% endif %}

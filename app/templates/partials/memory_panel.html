@@ -1,0 +1,13 @@
+{% import "partials/macros.html" as ui %}
+{% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+<div id="memory-list" class="memory-list">
+    {% for memory in items %}
+    {{ ui.memory_card(memory) }}
+    {% else %}
+    <div class="schema-placeholder">No matches</div>
+    {% endfor %}
+</div>
+{% if with_badges %}
+{% include "partials/memory_stats.html" %}
+{{ ui.memories_badge(ws.memory_stats().pending, True) }}
+{% endif %}

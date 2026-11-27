@@ -1,0 +1,272 @@
+% CHAPTER 5 - RESULTS AND DISCUSSION
+\chapter{Results and Discussion}
+
+\section{Experimental Setup}
+All measurements in this chapter were taken on the development laptop described in
+Section~3.9 (Intel Core i5-12450HX, 16\,GB RAM, NVIDIA GeForce RTX 3050 6\,GB laptop GPU,
+Windows 11). The Python environment used Python 3.11.15, PyTorch 2.12 with CUDA available,
+sentence-transformers 5.5.1, qdrant-client 1.12.1, sqlglot 25.2.0 and FastAPI 0.137.2.
+These versions are newer than some pins in \texttt{requirements.txt} (for example
+sentence-transformers 3.0.1 and FastAPI 0.111.0); the measured behaviour is that of the
+installed versions. Because CUDA was available, sentence-transformers could place the
+embedding and reranking models on the GPU.
+
+Two kinds of evaluation were performed:
+\begin{enumerate}[label=\arabic*., leftmargin=*, topsep=4pt, itemsep=3pt]
+    \item The \textbf{automated test suite} (Section~4.8), which checks functional
+          correctness, security rules and failure handling with mocked models.
+    \item The \textbf{retrieval benchmark} \texttt{tests/run\_evaluation.py}, which uses the
+          real \texttt{all-MiniLM-L6-v2} embedder and measures retrieval and context
+          assembly on an in-memory platform database.
+\end{enumerate}
+The benchmark results stored in the repository (\texttt{tests/evaluation\_results.json})
+were produced before the Qdrant vector store and the cross-encoder reranker were added.
+For this report the benchmark was therefore run again, unchanged, on a separate copy of the
+current code, where it used the embedded Qdrant store and the cross-encoder. Both results
+are reported so that the effect of the retrieval upgrade is visible.
+
+\section{Benchmark Design}
+
+\subsection{Dataset}
+The benchmark generates 120 synthetic cases in nine categories (Table~\ref{tab:dataset}).
+All memories are stored for one user (\texttt{u-a1}) of organization \texttt{org-a} on one
+connection, with a second user in the same organization and a user in a second organization
+used for isolation checks. Memories accumulate over the run: each case adds its memory to
+the same store, so later cases are retrieved against a growing set of distractors.
+
+\begin{table}[H]
+    \centering
+    \caption{Composition of the 120-Case Benchmark}
+    \begin{tabular}{p{4.6cm} p{0.9cm} p{7.9cm}}
+        \toprule
+        \textbf{Category} & \textbf{Cases} & \textbf{What is checked} \\
+        \midrule
+        Exact fact recall        & 15 & Question shares words with the stored definition. \\[3pt]
+        Semantic fact recall     & 15 & Question paraphrases the definition (e.g.\ ``uncollectible receivables'' vs.\ ``write-offs''). \\[3pt]
+        Business rule retrieval  & 15 & Procedural and semantic rules such as ``Display monetary results in INR''. \\[3pt]
+        Cross-session recall     & 12 & KPI rules retrieved in a later, separate query. \\[3pt]
+        Temporal recall          & 12 & After superseding, current query returns the new memory only and a history query returns the old one. \\[3pt]
+        Conflicting memories     & 12 & After superseding, only the new definition is returned. \\[3pt]
+        Follow-up understanding  & 15 & Prompt contains the previous analytical context for a follow-up. \\[3pt]
+        Unrelated exclusion      & 12 & An unrelated HR memory is stored and an invoice question is asked. \\[3pt]
+        User isolation           & 12 & A personal memory of user A1 must not be returned to user A2 or to another organization. \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:dataset}
+\end{table}
+
+\subsection{Metrics}
+The metrics are computed exactly as implemented in the script. For the 57 retrieval cases
+(exact, semantic, business rule and cross-session), a search with $k=3$ is made for the
+case's query and the position of the target memory in the result is recorded:
+\begin{align}
+    \text{Recall@3} &= \frac{1}{N}\sum_{i=1}^{N} \mathbb{1}[\text{target}_i \in \text{top-3}_i] \\
+    \text{MRR} &= \frac{1}{N}\sum_{i=1}^{N} \frac{1}{\text{rank}_i} \quad (0 \text{ if not retrieved})
+\end{align}
+following standard definitions \cite{manning2008ir, voorhees1999trec}.
+\textbf{Precision@3} is implemented as $1/|\text{returned}|$ when the target is returned and
+0 otherwise. With a single relevant memory per case and three results returned, its maximum
+in practice is $1/3 \approx 0.33$, so low values are expected and should be read relative to
+that ceiling. \textbf{Latency} is the wall-clock time of the search call.
+
+\textbf{Context-inclusion accuracy} counts a case as correct when: the target memory text
+appears in the built prompt (retrieval categories); superseding behaves as expected
+(temporal and conflict categories); the prompt contains the previous analytical context and
+question (follow-up category); or no memory is leaked (isolation category). In the
+unrelated-exclusion category the script counts every case as correct without checking the
+result, so these 12 cases do not measure anything. The \textbf{baseline} is a string
+heuristic that marks a case correct only if it is an exact-fact case whose question already
+contains ``excluding cancelled''; it represents a prompt without memory and is not an LLM
+run. No LLM is called anywhere in the benchmark, so this metric measures whether the right
+context reaches the prompt, \textbf{not} whether the generated SQL is correct.
+
+\section{Retrieval Results}
+Table~\ref{tab:retrieval} and Figure~\ref{fig:chart_retrieval} compare the stored run with
+the re-run on the current pipeline.
+
+\begin{table}[H]
+    \centering
+    \caption{Retrieval Metrics on the 57 Retrieval Cases}
+    \begin{tabular}{p{5.2cm} p{3.6cm} p{3.6cm}}
+        \toprule
+        \textbf{Metric} & \textbf{Stored run} & \textbf{Re-run (current)} \\
+        \midrule
+        Recall@3                     & 0.7018 (40/57) & 0.7895 (45/57) \\[3pt]
+        MRR                          & 0.6404         & 0.7281 \\[3pt]
+        Precision@3 (as implemented) & 0.2485         & 0.2778 \\[3pt]
+        Mean search latency          & 89.8\,ms       & 66.9\,ms \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:retrieval}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.64\textwidth}{chart_retrieval.png}{Retrieval quality before and after adding Qdrant hybrid search and cross-encoder reranking.}{fig:chart_retrieval}
+\end{figure}
+
+With the current pipeline the target memory was among the top three results in 45 of 57
+cases (Recall@3 = 0.79), compared with 40 of 57 before, and its average reciprocal rank
+rose from 0.64 to 0.73. Precision@3 also increased, from 0.25 to 0.28, against a practical
+ceiling of 0.33. Mean search latency was 67\,ms per query including embedding and reranking;
+the lower value than the stored run should not be over-interpreted, because the two runs
+were made at different times and the stored run's environment is not recorded.
+
+\section{Context Assembly and Governance Results}
+Table~\ref{tab:context_results} and Figure~\ref{fig:chart_inclusion} report the
+context-level results.
+
+\begin{table}[H]
+    \centering
+    \caption{Context-Inclusion, Update and Isolation Results}
+    \begin{tabular}{p{6.4cm} p{3.0cm} p{3.0cm}}
+        \toprule
+        \textbf{Measure} & \textbf{Stored run} & \textbf{Re-run} \\
+        \midrule
+        Baseline context-inclusion (120 cases)      & 0.0083 (1/120) & 0.0083 (1/120) \\[3pt]
+        CMF context-inclusion (120 cases)           & 0.9667 (116/120) & 0.9750 (117/120) \\[3pt]
+        CMF, excluding the 12 unchecked cases       & 104/108 = 0.963 & 105/108 = 0.972 \\[3pt]
+        Memory update accuracy (24 cases)           & 1.0 & 1.0 \\[3pt]
+        Isolation pass rate (12 cases)              & 1.0 & 1.0 \\[3pt]
+        Average prompt tokens, baseline             & 73.5 & 73.5 \\[3pt]
+        Average prompt tokens, CMF                  & 613  & 747.9 \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:context_results}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.78\textwidth}{chart_inclusion.png}{Context-inclusion accuracy and average prompt size, baseline versus CMF.}{fig:chart_inclusion}
+\end{figure}
+
+Three observations follow. First, the target business context reached the prompt in 105 of
+the 108 checked cases with the current pipeline. Inclusion is higher than Recall@3 because
+the prompt admits up to ten memories, not three. Second, all 24 superseding cases behaved
+correctly: after an update, the current query returned the new definition and not the old
+one, and history questions still found the old definition. Third, none of the 12 isolation
+cases leaked a personal memory to another user or another organization; authorization
+filters run before ranking, so a leak would require a filter bug rather than a ranking
+error. The cost of richer context is prompt size: about 748 approximate tokens on average
+against 74 for the schema-and-question baseline, which is well within the 4,000-token budget.
+
+\section{Functional Test Results}
+The complete suite was run with \texttt{pytest tests/}. All 64 collected tests passed in
+7.92 seconds (Figure~\ref{fig:chart_tests}); the eight warnings reported include the
+deprecation notice that the \texttt{google-generativeai} package is no longer
+maintained. Together with the benchmark, the tests confirm the guardrail behaviour that the
+benchmark does not cover: refusal of multi-statement, schema-changing, join-based and
+unbounded changes, enforcement of grants, re-validation at approval time, masking of
+sensitive columns for non-admins and read-only behaviour for Employees.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.60\textwidth}{chart_tests.png}{Collected test cases per test file; all 64 passed.}{fig:chart_tests}
+\end{figure}
+
+\section{Qualitative Walkthrough}
+
+\subsection{Governed Memories}
+To illustrate the memory layer, three rules were entered on a copy of the application
+connected to the retail sample database: two approved immediately (a revenue definition and
+a currency preference) and one left pending (a definition of Gold-tier customers). The
+Memories dashboard (Figure~\ref{fig:ui_memories}) shows the two approved memories with
+their type, status, scope, visibility and subject, and counts one memory pending review. The
+Evaluation page (Figure~\ref{fig:ui_evaluation}) displays the stored benchmark results and
+the individual cases, and labels the accuracy figure as context inclusion rather than
+executed SQL.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.48\textwidth}{ui_memories.png}{Memories dashboard: two approved memories, one pending review.}{fig:ui_memories}\hfill
+    \figimg{0.48\textwidth}{ui_evaluation.png}{Evaluation page with the stored benchmark results.}{fig:ui_evaluation}
+\end{figure}
+
+A memory search for ``monthly revenue by region'' then returned only the two approved
+memories; the pending one was excluded as required. Table~\ref{tab:search_example} lists the
+scores returned by the API. The revenue definition ranked first, helped by keyword overlap
+(``revenue'') and a type match (``revenue'' maps to semantic memories); the currency
+preference ranked second. In this example the cross-encoder assigned both short rule texts
+a probability close to zero, so the final ranking was decided by the first-stage term. This
+shows the value of keeping $(1-\lambda)S$ in the final score: the reranker refines the
+order when it is confident, while the first-stage features still carry signal when it is
+not.
+
+\begin{table}[H]
+    \centering
+    \caption{Scores Returned for the Query ``monthly revenue by region''}
+    \begin{tabular}{p{4.8cm} p{0.9cm} p{0.9cm} p{0.9cm} p{0.9cm} p{0.9cm} p{1.4cm}}
+        \toprule
+        \textbf{Memory} & $V$ & $K$ & $R$ & $I$ & $T$ & \textbf{Final} \\
+        \midrule
+        Revenue excludes cancelled and refunded orders \ldots & 0.344 & 0.333 & 1.0 & 0.778 & 1.0 & 0.2197 \\[3pt]
+        Display monetary results in INR.                      & 0.349 & 0.000 & 1.0 & 0.778 & 0.4 & 0.1700 \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:search_example}
+\end{table}
+
+\subsection{Answer and Context Inspector}
+Figure~\ref{fig:ui_chat_answer} shows a real answer produced earlier with Gemini on the
+SaaS sample database to the question ``what is this data all about?''. The generated SQL
+selects six descriptive columns from \texttt{accounts} with \texttt{LIMIT 5}; the answer
+gives a direct summary, three insights, and states that it covers only the first five rows.
+The sensitive \texttt{api\_key} column was not selected. The answer also shows that the
+interface displays the model's Markdown markers literally, a presentation issue noted for
+future work.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.72\textwidth}{ui_chat_answer.png}{Plain-language answer with insights and the SQL that produced it.}{fig:ui_chat_answer}
+\end{figure}
+
+The Context Inspector for the same question (Figure~\ref{fig:ui_inspector}) shows that the
+prompt used 1,170 of 4,000 tokens, contained no memories (none existed at that time) and one
+recent turn, and begins with the instruction priority hierarchy and the security notice,
+followed by the live schema with foreign-key references and sampled values.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.72\textwidth}{ui_inspector.png}{Context Inspector: token usage, memories used and excluded, and the exact prompt.}{fig:ui_inspector}
+\end{figure}
+
+\section{Discussion and Threats to Validity}
+The results support the design: authorization-first hybrid retrieval places the right
+business context in the prompt in almost all checked cases, superseding keeps definitions
+current, and isolation holds. Several limitations of the evidence must be stated plainly:
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=3pt]
+    \item \textbf{No SQL accuracy was measured.} Whether the LLM applies an included rule
+          correctly was not evaluated; context inclusion is a necessary, not a sufficient,
+          condition for correct SQL.
+    \item \textbf{Synthetic, template-generated data.} Several categories use near-identical
+          templates (for example ``KPI\_$i$''), which favours keyword matching and may
+          overstate performance on real, varied phrasing.
+    \item \textbf{Weak baseline.} The baseline is a string heuristic, not a memory-less LLM
+          run, so the difference between 0.8\% and 97.5\% shows that memories reach the
+          prompt, not the size of an end-to-end improvement.
+    \item \textbf{Unchecked cases and metric definitions.} The unrelated-exclusion category
+          is counted as correct without a check, and Precision@3 is not the textbook
+          definition; both were corrected for in the discussion above.
+    \item \textbf{Single machine, single run.} Latency was measured once on one laptop.
+\end{itemize}
+
+\section{Performance Summary}
+
+\begin{table}[H]
+    \centering
+    \caption{Summary of Measured Results (Current Pipeline)}
+    \begin{tabular}{p{7.0cm} p{5.8cm}}
+        \toprule
+        \textbf{Measure} & \textbf{Result} \\
+        \midrule
+        Automated tests                         & 64 / 64 passed (7.92\,s) \\[3pt]
+        Recall@3 / MRR (57 retrieval cases)     & 0.79 / 0.73 \\[3pt]
+        Mean memory search latency              & 66.9\,ms \\[3pt]
+        Context inclusion (108 checked cases)   & 97.2\% \\[3pt]
+        Memory update accuracy (24 cases)       & 100\% \\[3pt]
+        Isolation pass rate (12 cases)          & 100\% (no leaks) \\[3pt]
+        Average prompt size, CMF vs.\ baseline  & 747.9 vs.\ 73.5 approx.\ tokens \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:summary}
+\end{table}

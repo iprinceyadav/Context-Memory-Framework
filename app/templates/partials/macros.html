@@ -1,0 +1,84 @@
+{% macro memories_badge(count, oob=False) -%}
+<span id="nav-pending-badge" class="nav-badge{% if not count %} hidden{% endif %}"{% if oob %} hx-swap-oob="true"{% endif %}>{{ count }}</span>
+{%- endmacro %}
+
+{% macro result_table(rows) -%}
+{% if not rows %}
+<div class="error-msg empty-result">0 rows</div>
+{% else %}
+{% set headers = rows | columns %}
+<div class="result-table-wrapper">
+    <table class="result-table">
+        <thead><tr>{% for header in headers %}<th>{{ header }}</th>{% endfor %}</tr></thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>{% for header in headers %}<td>{{ row.get(header) | cell }}</td>{% endfor %}</tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro change_card(cr, is_admin, action_error=None) -%}
+{% set preview = field(cr, "preview") or {} %}
+{% set status_label = CHANGE_STATUS_LABELS.get(cr.status, cr.status) %}
+<div class="change-card" id="change-{{ cr.id }}">
+    <div class="memory-card-header">
+        <div class="memory-badges">
+            <span class="badge badge-action-{{ cr.action }}">{{ ACTION_LABELS.get(cr.action, cr.action) }}</span>
+            <strong class="change-title">{{ cr.summary }}</strong>
+        </div>
+        <span class="badge badge-status-{{ cr.status }}">{{ status_label }}</span>
+    </div>
+    {% if preview.get("changes") %}
+    <ul class="change-list">
+        {% for change in preview.get("changes") %}
+        <li><span class="mono">{{ change.column }}</span> → <span class="mono">{{ change.value }}</span></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% if preview.get("rows") %}
+    <div class="block-label">Affected</div>
+    {{ result_table(preview.get("rows")) }}
+    {% endif %}
+    {% if preview.get("new_rows") %}
+    <div class="block-label">New</div>
+    {{ result_table(preview.get("new_rows")) }}
+    {% endif %}
+    {% if cr.review_note %}<div class="change-meta">Note: {{ cr.review_note }}</div>{% endif %}
+    {% if cr.error %}<div class="error-msg">{{ cr.error }}</div>{% endif %}
+    {% if action_error %}<div class="error-msg">{{ action_error }}</div>{% endif %}
+    <details class="change-sql"><summary>SQL</summary><pre><code>{{ cr.sql | highlight_sql }}</code></pre></details>
+    {% if cr.status == "pending" and is_admin %}
+    <div class="memory-actions">
+        <button type="button" class="btn-approve" hx-post="/changes/{{ cr.id }}/approve" hx-target="closest .change-card" hx-swap="outerHTML" hx-confirm="Apply now?" hx-disabled-elt="closest .memory-actions button">Apply</button>
+        <button type="button" class="btn-reject" hx-post="/changes/{{ cr.id }}/reject" hx-target="closest .change-card" hx-swap="outerHTML" hx-disabled-elt="closest .memory-actions button">Discard</button>
+    </div>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro memory_card(m) -%}
+<div class="memory-card" id="memory-{{ m.id }}">
+    <div class="memory-card-header">
+        <div class="memory-badges">
+            <span class="badge badge-{{ m.memory_type }}">{{ m.memory_type }}</span>
+            <span class="badge badge-status-{{ m.status }}">{{ m.status }}</span>
+            <span class="badge badge-scope">{{ m.scope }} / {{ m.visibility }}</span>
+            {% if m.subject %}<span class="badge badge-subject">{{ m.subject }}</span>{% endif %}
+            {% if m.score is not none %}<span class="badge badge-score">{{ "%.2f" | format(m.score) }}</span>{% endif %}
+        </div>
+        <div class="memory-actions">
+            <button type="button" class="btn-text small" hx-get="/memories/{{ m.id }}/detail" hx-target="#modal-root">View</button>
+            {% if m.status == "pending" %}
+            <button type="button" class="btn-approve" hx-post="/memories/{{ m.id }}/approve" hx-include="#memory-toolbar" hx-target="#memory-panel">Approve</button>
+            <button type="button" class="btn-reject" hx-post="/memories/{{ m.id }}/reject" hx-include="#memory-toolbar" hx-target="#memory-panel">Reject</button>
+            {% endif %}
+            <button type="button" class="btn-text small" hx-get="/memories/{{ m.id }}/edit" hx-target="#memory-{{ m.id }}" hx-swap="outerHTML">Edit</button>
+            <button type="button" class="btn-text small text-danger" hx-post="/memories/{{ m.id }}/delete" hx-include="#memory-toolbar" hx-target="#memory-panel" hx-confirm="Delete?">Delete</button>
+        </div>
+    </div>
+    <div class="memory-card-content">{{ m.content }}</div>
+</div>
+{%- endmacro %}

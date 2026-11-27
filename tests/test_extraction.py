@@ -8,7 +8,7 @@ from app.services.extraction import (
 
 def test_override_not_extracted():
     extractor = MemoryExtractor()
-    with patch("app.services.extraction.llm.generate") as mock_llm:
+    with patch("app.services.extraction.llm.extract") as mock_llm:
         extracted = extractor.extract(
             conversation_messages=[
                 {"role": "user", "content": "For this particular report, include cancelled orders too."}
@@ -37,7 +37,7 @@ def test_extracts_business_definition():
       ]
     }
     ```"""
-    with patch("app.services.extraction.llm.generate", return_value=mock_json):
+    with patch("app.services.extraction.llm.extract", return_value=mock_json):
         extracted = extractor.extract(
             conversation_messages=[
                 {"role": "user", "content": "For all revenue reports, exclude cancelled orders."}

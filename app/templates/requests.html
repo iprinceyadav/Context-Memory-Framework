@@ -1,0 +1,18 @@
+{% extends "workspace.html" %}
+{% import "partials/macros.html" as ui %}
+{% block title %}Requests · CMF{% endblock %}
+{% block main %}
+<header class="workspace-header">
+    <h2>Requests</h2>
+</header>
+<div class="dashboard-body">
+    {% for change in changes %}
+    <div class="request-item">
+        <div class="request-meta"><span class="badge">{{ change.requester or change.user_id }}</span><span class="text-muted">{{ change.question }}</span></div>
+        {{ ui.change_card(change, ws.is_admin) }}
+    </div>
+    {% else %}
+    <div class="schema-placeholder">All clear.</div>
+    {% endfor %}
+</div>
+{% endblock %}

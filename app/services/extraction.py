@@ -122,7 +122,7 @@ class MemoryExtractor:
         prompt = _PROMPT.format(messages_text=transcript)
 
         try:
-            raw_output = llm.generate(prompt)
+            raw_output = llm.extract(prompt)
             cleaned = _strip_fences(raw_output)
             parsed = json.loads(cleaned)
         except Exception as exc:
