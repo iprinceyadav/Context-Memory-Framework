@@ -12,7 +12,7 @@ def create_organization(org: OrganizationCreate, db: Session = Depends(get_db)):
     db_org = db.query(Organization).filter(Organization.name == org.name).first()
     if db_org:
         raise HTTPException(status_code=400, detail="Organization already exists")
-    
+
     new_org = Organization(name=org.name, domain=org.domain)
     db.add(new_org)
     db.commit()
@@ -20,5 +20,5 @@ def create_organization(org: OrganizationCreate, db: Session = Depends(get_db)):
     return new_org
 
 @router.get("/", response_model=List[OrganizationResponse])
-def get_organizations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_organizations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(Organization).offset(skip).limit(limit).all()
