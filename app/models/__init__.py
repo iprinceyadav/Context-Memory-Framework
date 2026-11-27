@@ -7,7 +7,6 @@ from app.models.conversation import Conversation, Message
 from app.models.memory import Memory, MemoryVersion, MemoryAuditLog
 from app.models.query_memory import QueryMemory
 
-# Expose models and Base for Alembic or metadata creation
 __all__ = [
     "Base",
     "Organization",

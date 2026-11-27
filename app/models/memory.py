@@ -2,25 +2,24 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import String, Text, Float, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.models.base import Base, TimestampMixin, generate_uuid
+from app.models.base import Base, TimestampMixin, new_id
 
 
 class Memory(Base, TimestampMixin):
-    """Persistent long-term memory entry (semantic, episodic, or procedural)."""
     __tablename__ = "memories"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     connection_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("database_connections.id"), nullable=True, index=True
     )
 
-    memory_type: Mapped[str] = mapped_column(String, index=True)  # semantic, episodic, procedural
+    memory_type: Mapped[str] = mapped_column(String, index=True)
     content: Mapped[str] = mapped_column(Text)
     subject: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
-    scope: Mapped[str] = mapped_column(String, default="personal")  # personal, connection, organization
-    visibility: Mapped[str] = mapped_column(String, default="personal")  # personal, shared
+    scope: Mapped[str] = mapped_column(String, default="personal")
+    visibility: Mapped[str] = mapped_column(String, default="personal")
 
     confidence: Mapped[float] = mapped_column(Float, default=0.5)
     importance: Mapped[int] = mapped_column(Integer, default=5)
@@ -28,9 +27,8 @@ class Memory(Base, TimestampMixin):
     source_message_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     source_conversation_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     schema_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
-    embedding: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array of floats
+    embedding: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Lifecycle status: pending, approved, rejected, superseded, expired, deleted
     status: Mapped[str] = mapped_column(String, default="pending", index=True)
 
     observed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -53,10 +51,9 @@ class Memory(Base, TimestampMixin):
 
 
 class MemoryVersion(Base):
-    """Stores historical versions of corrected or updated memories."""
     __tablename__ = "memory_versions"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     memory_id: Mapped[str] = mapped_column(ForeignKey("memories.id"), index=True)
     version_number: Mapped[int] = mapped_column(Integer)
     previous_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -69,15 +66,13 @@ class MemoryVersion(Base):
 
 
 class MemoryAuditLog(Base):
-    """Audit trail for all memory lifecycle events."""
     __tablename__ = "memory_audit_logs"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     memory_id: Mapped[str] = mapped_column(ForeignKey("memories.id"), index=True)
-    action: Mapped[str] = mapped_column(String, index=True)  # created, retrieved, approved, rejected, corrected, superseded, expired, deleted
+    action: Mapped[str] = mapped_column(String, index=True)
     performed_by: Mapped[str] = mapped_column(String)
     details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     memory: Mapped["Memory"] = relationship(back_populates="audit_logs")
-

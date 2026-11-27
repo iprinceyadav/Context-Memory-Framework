@@ -1,6 +1,6 @@
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.models.base import Base, TimestampMixin, generate_uuid
+from app.models.base import Base, TimestampMixin, new_id
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 class Organization(Base, TimestampMixin):
     __tablename__ = "organizations"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String, unique=True, index=True)
     domain: Mapped[str | None] = mapped_column(String, unique=True, index=True)
 

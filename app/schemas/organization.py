@@ -12,6 +12,6 @@ class OrganizationCreate(OrganizationBase):
 class OrganizationResponse(OrganizationBase):
     id: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
