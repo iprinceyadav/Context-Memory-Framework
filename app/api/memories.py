@@ -1,10 +1,3 @@
-"""
-Memory Management, Search, Lifecycle, Debugging & Analytics API Routes.
-
-Enforces tenant isolation, user ownership/visibility rules, and connection
-ownership on every endpoint.
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -16,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import (
-    check_shared_memory_permission,
-    ensure_default_context,
-    verify_connection_ownership,
+    require_contributor,
+    authorize_user,
+    authorize_connection,
 )
 from app.database.connection import get_db
 from app.models.conversation import Conversation, Message
@@ -33,15 +26,15 @@ from app.schemas.memory import (
     MemoryUpdate,
     MemoryVersionResponse,
 )
-from app.services.memory_retrieval import MemoryRetrievalService
-from app.services.memory_service import MemoryService
+from app.services.retrieval import MemoryRetriever
+from app.services.memory_store import MemoryStore
 
 router = APIRouter(tags=["Memories"])
 
 
 @router.get("/memories", response_model=List[MemoryResponse])
 @router.get("/memories/", response_model=List[MemoryResponse], include_in_schema=False)
-def list_memories(
+def list_visible(
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     connection_id: Optional[str] = Query(default=None),
@@ -51,11 +44,10 @@ def list_memories(
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    """List authorized memories with optional filtering."""
-    ensure_default_context(db, organization_id, user_id)
-    verify_connection_ownership(db, connection_id, organization_id)
-    service = MemoryService(db)
-    return service.list_memories(
+    authorize_user(db, organization_id, user_id)
+    authorize_connection(db, connection_id, organization_id)
+    store = MemoryStore(db)
+    return store.list_visible(
         org_id=organization_id,
         user_id=user_id,
         connection_id=connection_id,
@@ -68,19 +60,18 @@ def list_memories(
 
 @router.post("/memories", response_model=MemoryResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/memories/", response_model=MemoryResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
-def create_memory(
+def create(
     payload: MemoryCreate,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    """Manually create a business/procedural/episodic memory."""
-    _, user = ensure_default_context(db, organization_id, user_id)
-    verify_connection_ownership(db, payload.connection_id, organization_id)
-    check_shared_memory_permission(user, payload.visibility, payload.scope)
+    _, user = authorize_user(db, organization_id, user_id)
+    authorize_connection(db, payload.connection_id, organization_id)
+    require_contributor(user, payload.visibility, payload.scope)
 
-    service = MemoryService(db)
-    return service.create_memory(
+    store = MemoryStore(db)
+    return store.create(
         data=payload.model_dump(),
         user_id=user_id,
         org_id=organization_id,
@@ -91,28 +82,26 @@ def create_memory(
 
 @router.get("/memories/statistics", response_model=MemoryStatistics)
 @router.get("/memory/statistics", response_model=MemoryStatistics)
-def get_memory_statistics(
+def memory_stats(
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    """Get memory statistics for dashboard overview."""
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    return service.get_statistics(org_id=organization_id, user_id=user_id)
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    return store.stats(org_id=organization_id, user_id=user_id)
 
 
 @router.post("/memories/search", response_model=List[MemorySearchResult])
-def search_memories(
+def search(
     req: MemorySearchRequest,
     db: Session = Depends(get_db),
 ):
-    """Hybrid semantic + keyword + recency + importance + type retrieval."""
-    ensure_default_context(db, req.organization_id, req.user_id)
-    verify_connection_ownership(db, req.connection_id, req.organization_id)
+    authorize_user(db, req.organization_id, req.user_id)
+    authorize_connection(db, req.connection_id, req.organization_id)
 
-    retrieval = MemoryRetrievalService(db)
-    results = retrieval.search_memories(
+    retriever = MemoryRetriever(db)
+    results = retriever.search(
         query=req.query,
         organization_id=req.organization_id,
         user_id=req.user_id,
@@ -144,34 +133,34 @@ def search_memories(
 
 
 @router.get("/memories/{memory_id}", response_model=MemoryResponse)
-def get_memory(
+def get(
     memory_id: str,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    return service.get_memory(memory_id=memory_id, user_id=user_id, org_id=organization_id)
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    return store.get(memory_id=memory_id, user_id=user_id, org_id=organization_id)
 
 
 @router.patch("/memories/{memory_id}", response_model=MemoryResponse)
-def update_memory(
+def update(
     memory_id: str,
     payload: MemoryUpdate,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    _, user = ensure_default_context(db, organization_id, user_id)
+    _, user = authorize_user(db, organization_id, user_id)
     if payload.visibility or payload.scope:
-        check_shared_memory_permission(
+        require_contributor(
             user, payload.visibility or "personal", payload.scope or "personal"
         )
-    service = MemoryService(db)
+    store = MemoryStore(db)
     updates = payload.model_dump(exclude_unset=True)
     reason = updates.pop("change_reason", None) or "API update"
-    return service.update_memory(
+    return store.update(
         memory_id=memory_id,
         updates=updates,
         user_id=user_id,
@@ -181,16 +170,16 @@ def update_memory(
 
 
 @router.delete("/memories/{memory_id}")
-def delete_memory(
+def delete(
     memory_id: str,
     hard_delete: bool = Query(default=False),
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    service.delete_memory(
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    store.delete(
         memory_id=memory_id,
         user_id=user_id,
         org_id=organization_id,
@@ -200,41 +189,41 @@ def delete_memory(
 
 
 @router.post("/memories/{memory_id}/approve", response_model=MemoryResponse)
-def approve_memory(
+def approve(
     memory_id: str,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    return service.approve_memory(memory_id=memory_id, user_id=user_id, org_id=organization_id)
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    return store.approve(memory_id=memory_id, user_id=user_id, org_id=organization_id)
 
 
 @router.post("/memories/{memory_id}/reject", response_model=MemoryResponse)
-def reject_memory(
+def reject(
     memory_id: str,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    return service.reject_memory(memory_id=memory_id, user_id=user_id, org_id=organization_id)
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    return store.reject(memory_id=memory_id, user_id=user_id, org_id=organization_id)
 
 
 @router.post("/memories/{memory_id}/supersede", response_model=MemoryResponse)
-def supersede_memory(
+def supersede(
     memory_id: str,
     payload: MemoryCreate,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    _, user = ensure_default_context(db, organization_id, user_id)
-    check_shared_memory_permission(user, payload.visibility, payload.scope)
-    service = MemoryService(db)
-    return service.supersede_memory(
+    _, user = authorize_user(db, organization_id, user_id)
+    require_contributor(user, payload.visibility, payload.scope)
+    store = MemoryStore(db)
+    return store.supersede(
         old_memory_id=memory_id,
         new_memory_data=payload.model_dump(),
         user_id=user_id,
@@ -244,39 +233,38 @@ def supersede_memory(
 
 
 @router.get("/memories/{memory_id}/versions", response_model=List[MemoryVersionResponse])
-def get_memory_versions(
+def memory_versions(
     memory_id: str,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    return service.get_versions(memory_id=memory_id, user_id=user_id, org_id=organization_id)
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    return store.versions_of(memory_id=memory_id, user_id=user_id, org_id=organization_id)
 
 
 @router.get("/memories/{memory_id}/audit", response_model=List[MemoryAuditLogResponse])
-def get_memory_audit_log(
+def memory_audit(
     memory_id: str,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    ensure_default_context(db, organization_id, user_id)
-    service = MemoryService(db)
-    return service.get_audit_log(memory_id=memory_id, user_id=user_id, org_id=organization_id)
+    authorize_user(db, organization_id, user_id)
+    store = MemoryStore(db)
+    return store.audit_trail(memory_id=memory_id, user_id=user_id, org_id=organization_id)
 
 
 @router.get("/memory/debug/{conversation_id}", response_model=ContextDebugInfo)
-def debug_conversation_context(
+def context_trace(
     conversation_id: str,
     organization_id: str = Query(default="default-org"),
     user_id: str = Query(default="default-user"),
     db: Session = Depends(get_db),
 ):
-    """Inspect the retrieved, excluded, scored memories and token budget for a conversation's latest turn."""
-    ensure_default_context(db, organization_id, user_id)
-    conv = (
+    authorize_user(db, organization_id, user_id)
+    conversation = (
         db.query(Conversation)
         .filter(
             Conversation.id == conversation_id,
@@ -285,7 +273,7 @@ def debug_conversation_context(
         )
         .first()
     )
-    if not conv:
+    if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     latest_assistant = (
@@ -325,7 +313,7 @@ _EVAL_RESULTS_PATH = _TESTS_DIR / "evaluation_results.json"
 _EVAL_DATASET_PATH = _TESTS_DIR / "evaluation_dataset.json"
 
 
-def _load_evaluation_payload(category: Optional[str] = None) -> Dict[str, Any]:
+def _evaluation_payload(category: Optional[str] = None) -> Dict[str, Any]:
     results = None
     dataset: List[Dict[str, Any]] = []
 
@@ -352,14 +340,12 @@ def _load_evaluation_payload(category: Optional[str] = None) -> Dict[str, Any]:
 
 
 @router.get("/evaluation/results")
-def get_evaluation_results(category: Optional[str] = Query(default=None)):
-    """Return offline benchmark metrics and dataset cases from tests/evaluation_*.json."""
-    return _load_evaluation_payload(category=category)
+def evaluation_results(category: Optional[str] = Query(default=None)):
+    return _evaluation_payload(category=category)
 
 
 @router.post("/evaluation/run")
-def run_evaluation_benchmark():
-    """Execute tests/run_evaluation.py and return updated results and dataset."""
+def run_evaluation():
     script_path = _TESTS_DIR / "run_evaluation.py"
     if not script_path.exists():
         raise HTTPException(status_code=404, detail="Evaluation script not found")
@@ -371,6 +357,4 @@ def run_evaluation_benchmark():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.run_benchmark()
-    return _load_evaluation_payload()
-
-
+    return _evaluation_payload()

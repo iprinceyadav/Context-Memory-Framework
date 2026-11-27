@@ -9,22 +9,22 @@ User Question
 [FastAPI /api/chat/ask] ──► Auth & Tenant Verification (app/core/auth.py)
    │
    ├─► Load Conversation & Working Memory (Conversation, Message, QueryMemory)
-   ├─► Load Live Schema (DatabaseManager / DatabaseSchema)
-   ├─► Hybrid Memory Retrieval (MemoryRetrievalService + EmbeddingService)
+   ├─► Load Live Schema (DatabaseConnector / DatabaseSchema)
+   ├─► Hybrid Memory Retrieval (MemoryRetriever + Embedder)
    │       └─ Filters FIRST: organization_id, user_id/visibility, connection_id, status=approved, valid_from/valid_to
    ├─► Context Engineering (ContextBuilder)
    │       └─ Priority Hierarchy + Token Budget + Untrusted Context Framing + Source IDs
    │
    ▼
-[LLMService.generate_with_context] ──► SQL Safety Validation (sqlglot read-only + live schema)
+[LLMClient.generate] ──► SQL Safety Validation (sqlglot read-only + live schema)
    │
    ▼
-[DatabaseManager.execute_direct_query] ──► External User DB (PostgreSQL / MySQL / SQLite)
+[DatabaseConnector.execute] ──► External User DB (PostgreSQL / MySQL / SQLite)
    │
    ▼
-[LLMService.generate_natural_response] ──► Save Message & QueryMemory
+[LLMClient.summarize] ──► Save Message & QueryMemory
    │
-   └─► Background Task: MemoryExtractionService ──► MemoryService (pending queue + dedup + contradiction check)
+   └─► Background Task: MemoryExtractor ──► MemoryStore (pending queue + dedup + contradiction check)
 ```
 
 ## Instruction Priority Hierarchy

@@ -1,17 +1,3 @@
-"""
-Reproducible Retrieval & Context-Aware NL2SQL Evaluation Suite.
-
-Generates a 120-case synthetic benchmark dataset across 9 evaluation categories
-(exact fact recall, semantic fact recall, business-rule retrieval, temporal
-recall, conflicting memory resolution, follow-up query understanding,
-cross-session recall, unrelated-memory exclusion, and user/tenant isolation),
-and benchmarks:
-  A. Baseline NL2SQL (without persistent memory)
-  B. Context-Aware NL2SQL (with persistent memory + hybrid retrieval)
-
-Outputs actual measured metrics to tests/evaluation_results.json.
-"""
-
 from __future__ import annotations
 
 import json
@@ -30,17 +16,15 @@ from sqlalchemy.pool import StaticPool
 
 from app.models import Base, DatabaseConnection, Organization, User
 from app.services.context_builder import ContextBuilder
-from app.services.embedding_service import EmbeddingProvider, embedding_service
-from app.services.encryption import encrypt_password
-from app.services.memory_retrieval import MemoryRetrievalService
-from app.services.memory_service import MemoryService
+from app.services.embedder import EmbeddingProvider, embedder
+from app.services.encryption import encrypt
+from app.services.retrieval import MemoryRetriever
+from app.services.memory_store import MemoryStore
 
 
-def build_synthetic_dataset() -> List[Dict[str, Any]]:
-    """Build 120 reproducible synthetic evaluation test cases across 9 categories."""
+def build_dataset() -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
 
-    # 1. Exact Fact Recall (15 cases)
     exact_facts = [
         ("revenue", "Revenue excludes cancelled orders.", "Show monthly revenue excluding cancelled orders"),
         ("active_customer", "Active customers have status = 'active'.", "Count active customers"),
@@ -58,19 +42,18 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
         ("lead_source", "Marketing attribution uses the utm_source column.", "Top marketing lead sources"),
         ("vendor_due", "Outstanding vendor payment means invoice_status = 'unpaid'.", "Top 10 vendors by outstanding payment"),
     ]
-    for i, (subj, mem, q) in enumerate(exact_facts):
+    for i, (subject, memory, question) in enumerate(exact_facts):
         cases.append({
             "id": f"exact_{i+1}",
             "category": "exact_fact_recall",
             "memory_type": "semantic",
-            "subject": subj,
-            "memory": mem,
-            "query": q,
-            "expected_in_sql_hint": subj,
+            "subject": subject,
+            "memory": memory,
+            "query": question,
+            "expected_in_sql_hint": subject,
             "should_retrieve": True,
         })
 
-    # 2. Semantic Fact Recall (15 cases - paraphrased queries)
     semantic_pairs = [
         ("gross_sales", "Total bookings equal sum of confirmed contract values.", "How much did we book this quarter?"),
         ("headcount", "Full-time employees have employment_type = 'FTE'.", "How many salaried permanent staff do we have?"),
@@ -88,19 +71,18 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
         ("trial_conv", "Converted trials have upgraded_at IS NOT NULL.", "Trial-to-paid conversion count"),
         ("on_time_pay", "Prompt payers settle invoices within 15 days of issue.", "Clients who pay bills quickly"),
     ]
-    for i, (subj, mem, q) in enumerate(semantic_pairs):
+    for i, (subject, memory, question) in enumerate(semantic_pairs):
         cases.append({
             "id": f"semantic_{i+1}",
             "category": "semantic_fact_recall",
             "memory_type": "semantic",
-            "subject": subj,
-            "memory": mem,
-            "query": q,
-            "expected_in_sql_hint": subj,
+            "subject": subject,
+            "memory": memory,
+            "query": question,
+            "expected_in_sql_hint": subject,
             "should_retrieve": True,
         })
 
-    # 3. Business-Rule & Procedural Retrieval (15 cases)
     rules = [
         ("date_col", "Always use invoice_date for financial reports.", "Generate quarterly financial report"),
         ("currency", "Display monetary results in INR.", "Show total revenue by city"),
@@ -118,19 +100,18 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
         ("soft_del", "Always filter deleted_at IS NULL on transactions.", "Total completed transactions"),
         ("b2c_filter", "Retail channel corresponds to channel = 'B2C'.", "Show retail channel revenue"),
     ]
-    for i, (subj, mem, q) in enumerate(rules):
+    for i, (subject, memory, question) in enumerate(rules):
         cases.append({
             "id": f"rule_{i+1}",
             "category": "business_rule_retrieval",
             "memory_type": "procedural" if i < 5 else "semantic",
-            "subject": subj,
-            "memory": mem,
-            "query": q,
-            "expected_in_sql_hint": subj,
+            "subject": subject,
+            "memory": memory,
+            "query": question,
+            "expected_in_sql_hint": subject,
             "should_retrieve": True,
         })
 
-    # 4. Temporal Recall (12 cases)
     for i in range(12):
         cases.append({
             "id": f"temporal_{i+1}",
@@ -144,7 +125,6 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
             "should_retrieve": True,
         })
 
-    # 5. Conflicting Memory Resolution (12 cases)
     for i in range(12):
         cases.append({
             "id": f"conflict_{i+1}",
@@ -157,7 +137,6 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
             "should_retrieve": True,
         })
 
-    # 6. Follow-up Query Understanding (15 cases)
     followups = [
         ("Show top 10 customers by revenue", "Only show customers from Delhi", "Delhi"),
         ("List monthly sales for 2026", "Sort them in descending order", "DESC"),
@@ -175,17 +154,16 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
         ("Show warehouse stock levels", "Only items below reorder point", "reorder"),
         ("List overdue invoices", "Sort by due date ascending", "ASC"),
     ]
-    for i, (prev_q, follow_q, token) in enumerate(followups):
+    for i, (previous_query, followup_query, token) in enumerate(followups):
         cases.append({
             "id": f"followup_{i+1}",
             "category": "followup_query_understanding",
-            "previous_query": prev_q,
-            "query": follow_q,
+            "previous_query": previous_query,
+            "query": followup_query,
             "expected_context_token": token,
             "should_retrieve": True,
         })
 
-    # 7. Cross-Session Recall (12 cases)
     for i in range(12):
         cases.append({
             "id": f"cross_session_{i+1}",
@@ -197,7 +175,6 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
             "should_retrieve": True,
         })
 
-    # 8. Unrelated-Memory Exclusion (12 cases)
     for i in range(12):
         cases.append({
             "id": f"unrelated_{i+1}",
@@ -209,7 +186,6 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
             "should_retrieve": False,
         })
 
-    # 9. User & Tenant Isolation (12 cases)
     for i in range(12):
         cases.append({
             "id": f"isolation_{i+1}",
@@ -224,12 +200,10 @@ def build_synthetic_dataset() -> List[Dict[str, Any]]:
 
 
 def run_benchmark() -> Dict[str, Any]:
-    """Execute the 120-case evaluation suite using real all-MiniLM-L6-v2 embeddings."""
-    # Ensure default SentenceTransformerProvider (all-MiniLM-L6-v2) is active
-    from app.services.embedding_service import SentenceTransformerProvider
-    embedding_service.set_provider(SentenceTransformerProvider())
+    from app.services.embedder import SentenceTransformerProvider
+    embedder.set_provider(SentenceTransformerProvider())
 
-    dataset = build_synthetic_dataset()
+    dataset = build_dataset()
     dataset_path = os.path.join(os.path.dirname(__file__), "evaluation_dataset.json")
     with open(dataset_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f, indent=2)
@@ -239,19 +213,18 @@ def run_benchmark() -> Dict[str, Any]:
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()
 
-    # Seed tenants, users, connections
     db.add_all([
         Organization(id="org-a", name="Org A", domain="a.test"),
         Organization(id="org-b", name="Org B", domain="b.test"),
         User(id="u-a1", email="a1@a.test", full_name="A1", hashed_password="h", role="owner", organization_id="org-a"),
         User(id="u-a2", email="a2@a.test", full_name="A2", hashed_password="h", role="analyst", organization_id="org-a"),
         User(id="u-b1", email="b1@b.test", full_name="B1", hashed_password="h", role="owner", organization_id="org-b"),
-        DatabaseConnection(id="c-a1", name="DB A1", db_type="sqlite", host="localhost", port=0, database_name="a1.db", username="s", encrypted_password=encrypt_password(""), organization_id="org-a"),
+        DatabaseConnection(id="c-a1", name="DB A1", db_type="sqlite", host="localhost", port=0, database_name="a1.db", username="s", encrypted_password=encrypt(""), organization_id="org-a"),
     ])
     db.commit()
 
-    mem_svc = MemoryService(db)
-    retrieval = MemoryRetrievalService(db)
+    store = MemoryStore(db)
+    retriever = MemoryRetriever(db)
     builder = ContextBuilder(db)
 
     latencies_ms: List[float] = []
@@ -274,10 +247,10 @@ def run_benchmark() -> Dict[str, Any]:
     })
 
     for case in dataset:
-        cat = case["category"]
+        category = case["category"]
 
-        if cat in ("exact_fact_recall", "semantic_fact_recall", "business_rule_retrieval", "cross_session_recall"):
-            target = mem_svc.create_memory(
+        if category in ("exact_fact_recall", "semantic_fact_recall", "business_rule_retrieval", "cross_session_recall"):
+            target = store.create(
                 data={
                     "memory_type": case["memory_type"],
                     "subject": case["subject"],
@@ -291,23 +264,23 @@ def run_benchmark() -> Dict[str, Any]:
                 auto_approve=True,
             )
 
-            t0 = time.perf_counter()
-            res = retrieval.search_memories(
+            started = time.perf_counter()
+            found = retriever.search(
                 query=case["query"],
                 organization_id="org-a",
                 user_id="u-a1",
                 connection_id="c-a1",
                 limit=3,
             )
-            latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+            latencies_ms.append((time.perf_counter() - started) * 1000.0)
 
-            top_ids = [r["memory_id"] for r in res]
+            top_ids = [r["memory_id"] for r in found]
             hit = target.id in top_ids
             recalls_at_3.append(1.0 if hit else 0.0)
             precisions_at_3.append((1.0 / len(top_ids)) if (hit and top_ids) else 0.0)
             mrr_scores.append((1.0 / (top_ids.index(target.id) + 1)) if hit else 0.0)
 
-            ctx = builder.build_context(
+            ctx = builder.build(
                 natural_query=case["query"],
                 schema_json_str=schema_json,
                 db_type="sqlite",
@@ -318,16 +291,14 @@ def run_benchmark() -> Dict[str, Any]:
             token_counts_context.append(ctx["context_debug"]["tokens_used"])
             token_counts_baseline.append(max(1, len(schema_json) // 4 + len(case["query"]) // 4))
 
-            # Context-aware prompt includes business rule; baseline schema-only does not
             if case["memory"] in ctx["prompt"]:
                 context_correct += 1
-            # Baseline has no business rule knowledge (only exact_fact_recall might be guessable if explicit in query)
-            if cat == "exact_fact_recall" and "excluding cancelled" in case["query"].lower():
+            if category == "exact_fact_recall" and "excluding cancelled" in case["query"].lower():
                 baseline_correct += 1
 
-        elif cat in ("temporal_recall", "conflicting_memory_resolution"):
+        elif category in ("temporal_recall", "conflicting_memory_resolution"):
             update_total += 1
-            old_m = mem_svc.create_memory(
+            previous = store.create(
                 data={
                     "memory_type": "semantic",
                     "subject": case["subject"],
@@ -339,82 +310,81 @@ def run_benchmark() -> Dict[str, Any]:
                 org_id="org-a",
                 auto_approve=True,
             )
-            new_m = mem_svc.supersede_memory(
-                old_memory_id=old_m.id,
+            replacement = store.supersede(
+                old_memory_id=previous.id,
                 new_memory_data={"content": case["new_memory"]},
                 user_id="u-a1",
                 org_id="org-a",
                 auto_approve=True,
             )
-            q_curr = case.get("current_query") or case.get("query")
-            res_curr = retrieval.search_memories(q_curr, "org-a", "u-a1", connection_id="c-a1", limit=3)
-            curr_ok = any(r["memory_id"] == new_m.id for r in res_curr) and not any(r["memory_id"] == old_m.id for r in res_curr)
+            current_query = case.get("current_query") or case.get("query")
+            current_found = retriever.search(current_query, "org-a", "u-a1", connection_id="c-a1", limit=3)
+            current_ok = any(r["memory_id"] == replacement.id for r in current_found) and not any(r["memory_id"] == previous.id for r in current_found)
 
-            if cat == "temporal_recall":
-                res_hist = retrieval.search_memories(case["historical_query"], "org-a", "u-a1", connection_id="c-a1", limit=5)
-                hist_ok = any(r["memory_id"] == old_m.id for r in res_hist)
-                if curr_ok and hist_ok:
+            if category == "temporal_recall":
+                history_found = retriever.search(case["historical_query"], "org-a", "u-a1", connection_id="c-a1", limit=5)
+                history_ok = any(r["memory_id"] == previous.id for r in history_found)
+                if current_ok and history_ok:
                     update_correct += 1
                     context_correct += 1
             else:
-                if curr_ok:
+                if current_ok:
                     update_correct += 1
                     context_correct += 1
 
-        elif cat == "followup_query_understanding":
+        elif category == "followup_query_understanding":
             from app.models.conversation import Conversation, Message
             from app.models.query_memory import QueryMemory
 
-            conv = Conversation(title="Eval Followup", organization_id="org-a", user_id="u-a1", connection_id="c-a1")
-            db.add(conv)
+            conversation = Conversation(title="Eval Followup", organization_id="org-a", user_id="u-a1", connection_id="c-a1")
+            db.add(conversation)
             db.flush()
-            db.add(Message(conversation_id=conv.id, role="user", content=case["previous_query"]))
+            db.add(Message(conversation_id=conversation.id, role="user", content=case["previous_query"]))
             db.add(QueryMemory(
                 organization_id="org-a",
                 user_id="u-a1",
                 connection_id="c-a1",
-                conversation_id=conv.id,
+                conversation_id=conversation.id,
                 natural_language_query=case["previous_query"],
                 normalized_intent=case["previous_query"],
                 sanitized_sql_template="SELECT * FROM orders",
             ))
             db.commit()
 
-            ctx = builder.build_context(
+            ctx = builder.build(
                 natural_query=case["query"],
                 schema_json_str=schema_json,
                 db_type="sqlite",
                 organization_id="org-a",
                 user_id="u-a1",
                 connection_id="c-a1",
-                conversation_id=conv.id,
+                conversation_id=conversation.id,
             )
             if "PREVIOUS ANALYTICAL CONTEXT" in ctx["prompt"] and case["previous_query"] in ctx["prompt"]:
                 context_correct += 1
 
-        elif cat == "unrelated_memory_exclusion":
-            mem_svc.create_memory(
+        elif category == "unrelated_memory_exclusion":
+            store.create(
                 data={"memory_type": "semantic", "subject": case["subject"], "content": case["memory"]},
                 user_id="u-a1",
                 org_id="org-a",
                 auto_approve=True,
             )
-            res = retrieval.search_memories(case["query"], "org-a", "u-a1", connection_id="c-a1", limit=3)
-            # Irrelevant HR memory should have low similarity/keyword relevance vs threshold or not affect SQL
-            context_correct += 1  # Tracked separately; prompt stays safe
+            found = retriever.search(case["query"], "org-a", "u-a1", connection_id="c-a1", limit=3)
+            context_correct += 1
 
-        elif cat == "user_isolation":
+        elif category == "user_isolation":
             isolation_total += 1
-            mem_svc.create_memory(
+            store.create(
                 data={"memory_type": "semantic", "content": case["memory"], "visibility": "personal"},
                 user_id="u-a1",
                 org_id="org-a",
                 auto_approve=True,
             )
             if case["isolation_type"] == "tenant":
-                leaked = retrieval.search_memories(case["query"], "org-b", "u-b1")
+                leaked = retriever.search(case["query"], "org-b", "u-b1")
             else:
-                leaked = retrieval.search_memories(case["query"], "org-a", "u-a2")
+                leaked = retriever.search(case["query"], "org-a", "u-a2")
             if len(leaked) == 0:
                 isolation_passed += 1
                 context_correct += 1

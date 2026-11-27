@@ -1,11 +1,3 @@
-"""
-Embedding Service for the Context Memory Framework.
-
-Provides vector embeddings for semantic search and memory retrieval.
-Uses sentence-transformers with a provider abstraction so the underlying
-model can be swapped without changing call-sites.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -19,30 +11,25 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingProvider(ABC):
-    """Abstract base for any embedding backend."""
-
     @abstractmethod
     def encode(self, texts: List[str]) -> List[List[float]]:
-        """Return one embedding vector per input text."""
+        ...
 
     @property
     @abstractmethod
     def dimension(self) -> int:
-        """Dimensionality of the vectors this provider produces."""
+        ...
 
 
 class SentenceTransformerProvider(EmbeddingProvider):
-    """Provider backed by the *sentence-transformers* library."""
-
-    _DIMENSION = 384  # all-MiniLM-L6-v2 output size
+    _DIMENSION = 384
 
     def __init__(self, model_name: str | None = None) -> None:
         self._model_name = model_name or settings.EMBEDDING_MODEL or "all-MiniLM-L6-v2"
-        self._model = None  # lazy – loaded on first call
+        self._model = None
         self._load_failed = False
 
     def _load_model(self) -> None:
-        """Load the model on first use, logging any errors gracefully."""
         if self._model is not None or self._load_failed:
             return
         try:
@@ -65,7 +52,6 @@ class SentenceTransformerProvider(EmbeddingProvider):
         return self._DIMENSION
 
     def encode(self, texts: List[str]) -> List[List[float]]:
-        """Encode *texts* into normalized embedding vectors."""
         if not texts:
             return []
 
@@ -90,14 +76,11 @@ class SentenceTransformerProvider(EmbeddingProvider):
             return [[] for _ in texts]
 
 
-class EmbeddingService:
-    """High-level embedding service used throughout the application."""
-
+class Embedder:
     def __init__(self, provider: EmbeddingProvider | None = None) -> None:
         self._provider: EmbeddingProvider = provider or SentenceTransformerProvider()
 
     def set_provider(self, provider: EmbeddingProvider) -> None:
-        """Replace the current embedding provider at runtime."""
         self._provider = provider
         logger.info("Embedding provider switched to %s", type(provider).__name__)
 
@@ -105,16 +88,14 @@ class EmbeddingService:
     def dimension(self) -> int:
         return self._provider.dimension
 
-    def generate_embedding(self, text: str) -> List[float]:
-        """Generate an embedding vector for a single piece of text."""
+    def embed(self, text: str) -> List[float]:
         if not text or not text.strip():
             return []
 
         results = self._provider.encode([text])
         return results[0] if results else []
 
-    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embedding vectors for a batch of texts."""
+    def embed_many(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
 
@@ -135,7 +116,6 @@ class EmbeddingService:
 
     @staticmethod
     def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
-        """Compute cosine similarity between two vectors."""
         if not vec1 or not vec2:
             return 0.0
 
@@ -154,4 +134,4 @@ class EmbeddingService:
         return float(np.dot(a, b) / (norm_a * norm_b))
 
 
-embedding_service: EmbeddingService = EmbeddingService()
+embedder: Embedder = Embedder()

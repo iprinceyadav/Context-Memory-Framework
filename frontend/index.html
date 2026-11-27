@@ -4,17 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Context Memory Framework</title>
-    <!-- Fonts: Inter for UI, JetBrains Mono for code -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- Main Stylesheet -->
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="app-container">
 
-        <!-- View 1: Landing Page -->
         <section id="view-landing" class="view-section active">
             <div class="landing-content">
                 <div class="logo-mark">CMF</div>
@@ -60,7 +57,6 @@
             </div>
         </section>
 
-        <!-- View 2: Connection Flow -->
         <section id="view-connect" class="view-section hidden">
             <div class="connect-modal">
                 <div class="modal-header">
@@ -69,7 +65,6 @@
                 </div>
                 <div class="modal-body">
 
-                    <!-- Step 1: Choose Database -->
                     <div id="connect-step-1" class="connect-step active">
                         <div class="db-options">
                             <div class="db-option" data-db="postgresql">
@@ -99,7 +94,6 @@
                         </div>
                     </div>
 
-                    <!-- Step 2: Credentials -->
                     <div id="connect-step-2" class="connect-step hidden">
                         <div class="selected-db-indicator">
                             <span id="selected-db-name">PostgreSQL</span>
@@ -153,7 +147,6 @@
                         </form>
                     </div>
 
-                    <!-- Step 3: Loading / Syncing -->
                     <div id="connect-step-3" class="connect-step hidden">
                         <div class="sync-loader">
                             <div class="spinner"></div>
@@ -170,17 +163,14 @@
             </div>
         </section>
 
-        <!-- View 3: Main Workspace -->
         <section id="view-workspace" class="view-section hidden">
 
-            <!-- Left Sidebar -->
             <aside class="sidebar-left">
                 <div class="sidebar-header">
                     <div class="logo-mark small">CMF</div>
                     <span class="brand-text">Context Memory</span>
                 </div>
 
-                <!-- Navigation Tabs -->
                 <nav class="sidebar-nav">
                     <button class="nav-tab active" data-tab="chat">
                         <span>SQL Assistant</span>
@@ -211,7 +201,6 @@
                     </div>
                 </div>
 
-                <!-- Conversations History -->
                 <div class="conversations-section">
                     <div class="section-title space-between" style="display:flex;align-items:center;">
                         <span>CONVERSATIONS</span>
@@ -234,10 +223,8 @@
                 </div>
             </aside>
 
-            <!-- Center Workspace -->
             <main class="workspace-main">
 
-                <!-- TAB 1: Chat -->
                 <div id="tab-chat" class="workspace-tab active">
                     <header class="workspace-header space-between" style="display:flex;align-items:center;">
                         <div class="header-titles">
@@ -253,7 +240,6 @@
                     </div>
 
                     <div class="chat-container" id="chat-container">
-                        <!-- Empty State -->
                         <div class="empty-state" id="workspace-empty">
                             <div class="empty-icon">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
@@ -268,7 +254,6 @@
                             </div>
                         </div>
 
-                        <!-- Chat History -->
                         <div class="chat-history" id="chat-history"></div>
                     </div>
 
@@ -285,7 +270,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 2: Memory Dashboard -->
                 <div id="tab-memories" class="workspace-tab hidden">
                     <header class="workspace-header space-between" style="display:flex;align-items:center;">
                         <div class="header-titles">
@@ -327,7 +311,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 3: Context Inspector -->
                 <div id="tab-inspector" class="workspace-tab hidden">
                     <header class="workspace-header">
                         <div class="header-titles">
@@ -340,7 +323,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 4: Business Knowledge Manager -->
                 <div id="tab-knowledge" class="workspace-tab hidden">
                     <header class="workspace-header">
                         <div class="header-titles">
@@ -400,7 +382,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 5: Evaluation Benchmark -->
                 <div id="tab-evaluation" class="workspace-tab hidden">
                     <header class="workspace-header space-between" style="display:flex;align-items:center;">
                         <div class="header-titles">
@@ -419,7 +400,6 @@
 
             </main>
 
-            <!-- Right Sidebar (SQL & Context Quick Panel) -->
             <aside class="sidebar-right collapsed" id="context-panel-wrapper">
                 <div class="sidebar-right-header">
                     <h3>Query Context</h3>
@@ -458,7 +438,6 @@
         </section>
     </div>
 
-    <!-- Memory Detail & Version History Modal -->
     <div id="memory-detail-modal" class="modal-overlay hidden">
         <div class="connect-modal modal-wide">
             <div class="modal-header space-between" style="display:flex;align-items:center;">

@@ -25,7 +25,7 @@ class DatabaseConnectionResponse(BaseModel):
     is_active: bool
     organization_id: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 

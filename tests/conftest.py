@@ -10,13 +10,11 @@ from sqlalchemy.pool import StaticPool
 from app.database.connection import get_db
 from app.main import app
 from app.models import Base, DatabaseConnection, Organization, User
-from app.services.embedding_service import EmbeddingProvider, embedding_service
-from app.services.encryption import encrypt_password
+from app.services.embedder import EmbeddingProvider, embedder
+from app.services.encryption import encrypt
 
 
-class DeterministicTestEmbeddingProvider(EmbeddingProvider):
-    """Fast, deterministic 64-dim bag-of-words + trigram embedding provider for unit tests."""
-
+class HashEmbeddingProvider(EmbeddingProvider):
     _DIM = 64
 
     @property
@@ -37,16 +35,15 @@ class DeterministicTestEmbeddingProvider(EmbeddingProvider):
 
 
 @pytest.fixture(autouse=True)
-def use_deterministic_embeddings():
-    """Avoid downloading/loading heavy torch weights during automated tests."""
-    prev_provider = embedding_service._provider
-    embedding_service.set_provider(DeterministicTestEmbeddingProvider())
+def hash_embeddings():
+    prev_provider = embedder._provider
+    embedder.set_provider(HashEmbeddingProvider())
     yield
-    embedding_service.set_provider(prev_provider)
+    embedder.set_provider(prev_provider)
 
 
 @pytest.fixture()
-def test_db():
+def db_session():
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -63,10 +60,10 @@ def test_db():
 
 
 @pytest.fixture()
-def test_client(test_db):
+def client(db_session):
     def override_get_db():
         try:
-            yield test_db
+            yield db_session
         finally:
             pass
 
@@ -77,25 +74,25 @@ def test_client(test_db):
 
 
 @pytest.fixture()
-def sample_org(test_db):
+def sample_org(db_session):
     org = Organization(id="org-a", name="Tenant A", domain="tenanta.test")
-    test_db.add(org)
-    test_db.commit()
-    test_db.refresh(org)
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
     return org
 
 
 @pytest.fixture()
-def other_org(test_db):
+def other_org(db_session):
     org = Organization(id="org-b", name="Tenant B", domain="tenantb.test")
-    test_db.add(org)
-    test_db.commit()
-    test_db.refresh(org)
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
     return org
 
 
 @pytest.fixture()
-def sample_user(test_db, sample_org):
+def sample_user(db_session, sample_org):
     user = User(
         id="user-a1",
         email="a1@tenanta.test",
@@ -104,14 +101,14 @@ def sample_user(test_db, sample_org):
         role="analyst",
         organization_id=sample_org.id,
     )
-    test_db.add(user)
-    test_db.commit()
-    test_db.refresh(user)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
     return user
 
 
 @pytest.fixture()
-def second_user(test_db, sample_org):
+def second_user(db_session, sample_org):
     user = User(
         id="user-a2",
         email="a2@tenanta.test",
@@ -120,14 +117,14 @@ def second_user(test_db, sample_org):
         role="viewer",
         organization_id=sample_org.id,
     )
-    test_db.add(user)
-    test_db.commit()
-    test_db.refresh(user)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
     return user
 
 
 @pytest.fixture()
-def other_user(test_db, other_org):
+def other_user(db_session, other_org):
     user = User(
         id="user-b1",
         email="b1@tenantb.test",
@@ -136,14 +133,14 @@ def other_user(test_db, other_org):
         role="owner",
         organization_id=other_org.id,
     )
-    test_db.add(user)
-    test_db.commit()
-    test_db.refresh(user)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
     return user
 
 
 @pytest.fixture()
-def sample_connection(test_db, sample_org):
+def sample_connection(db_session, sample_org):
     conn = DatabaseConnection(
         id="conn-a1",
         name="Sales DB",
@@ -152,17 +149,17 @@ def sample_connection(test_db, sample_org):
         port=0,
         database_name="sales.db",
         username="sqlite",
-        encrypted_password=encrypt_password(""),
+        encrypted_password=encrypt(""),
         organization_id=sample_org.id,
     )
-    test_db.add(conn)
-    test_db.commit()
-    test_db.refresh(conn)
+    db_session.add(conn)
+    db_session.commit()
+    db_session.refresh(conn)
     return conn
 
 
 @pytest.fixture()
-def second_connection(test_db, sample_org):
+def second_connection(db_session, sample_org):
     conn = DatabaseConnection(
         id="conn-a2",
         name="HR DB",
@@ -171,11 +168,10 @@ def second_connection(test_db, sample_org):
         port=0,
         database_name="hr.db",
         username="sqlite",
-        encrypted_password=encrypt_password(""),
+        encrypted_password=encrypt(""),
         organization_id=sample_org.id,
     )
-    test_db.add(conn)
-    test_db.commit()
-    test_db.refresh(conn)
+    db_session.add(conn)
+    db_session.commit()
+    db_session.refresh(conn)
     return conn
-

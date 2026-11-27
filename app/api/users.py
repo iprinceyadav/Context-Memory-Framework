@@ -9,19 +9,16 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    # Check if organization exists
     org = db.query(Organization).filter(Organization.id == user.organization_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-        
-    # Check if user email already exists
+
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-        
-    # In a real app, hash the password
+
     fake_hashed_password = f"hashed_{user.password}"
-    
+
     new_user = User(
         email=user.email,
         full_name=user.full_name,

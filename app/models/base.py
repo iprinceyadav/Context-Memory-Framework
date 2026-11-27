@@ -10,5 +10,5 @@ class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-def generate_uuid():
+def new_id():
     return str(uuid.uuid4())

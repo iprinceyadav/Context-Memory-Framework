@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.models.base import Base, TimestampMixin, generate_uuid
+from app.models.base import Base, TimestampMixin, new_id
 
 if TYPE_CHECKING:
     from app.models.organization import Organization
@@ -11,10 +11,9 @@ if TYPE_CHECKING:
 
 
 class Conversation(Base, TimestampMixin):
-    """Represents a multi-turn NL2SQL conversation session."""
     __tablename__ = "conversations"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
@@ -35,17 +34,15 @@ class Conversation(Base, TimestampMixin):
 
 
 class Message(Base):
-    """Represents an individual user or assistant turn within a conversation."""
     __tablename__ = "messages"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
-    role: Mapped[str] = mapped_column(String)  # "user" or "assistant"
+    role: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
     sql_query: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    query_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON summary/preview
-    context_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON of used memory IDs & scores
+    query_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    context_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
-

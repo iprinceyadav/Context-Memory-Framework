@@ -15,6 +15,6 @@ class UserResponse(UserBase):
     id: str
     organization_id: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True

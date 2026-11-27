@@ -2,7 +2,7 @@ import google.generativeai as genai
 from app.core.config import settings
 
 
-class LLMService:
+class LLMClient:
     def __init__(self):
         if settings.LLM_API_KEY:
             genai.configure(api_key=settings.LLM_API_KEY)
@@ -10,7 +10,7 @@ class LLMService:
         else:
             self.model = None
 
-    def _clean_sql(self, raw_text: str) -> str:
+    def _strip_fences(self, raw_text: str) -> str:
         sql = raw_text.strip()
         if sql.startswith("```sql"):
             sql = sql[6:]
@@ -36,21 +36,19 @@ User Request:
 CRITICAL: Return ONLY the raw SQL query. Do not include markdown formatting like ```sql or ```. Do not include any explanations.
 """
         response = self.model.generate_content(prompt)
-        return self._clean_sql(response.text)
+        return self._strip_fences(response.text)
 
-    def generate_with_context(self, prompt: str) -> str:
-        """Generate SQL or structured output from a pre-built context prompt."""
+    def generate(self, prompt: str) -> str:
         if not self.model:
             raise Exception("LLM_API_KEY is not configured in .env")
         response = self.model.generate_content(prompt)
-        return self._clean_sql(response.text)
+        return self._strip_fences(response.text)
 
-    def generate_natural_response(self, prompt: str) -> str:
-        """Generate a human-readable analytical answer from query results."""
+    def summarize(self, prompt: str) -> str:
         if not self.model:
             raise Exception("LLM_API_KEY is not configured in .env")
         response = self.model.generate_content(prompt)
         return response.text.strip()
 
 
-llm_service = LLMService()
+llm = LLMClient()

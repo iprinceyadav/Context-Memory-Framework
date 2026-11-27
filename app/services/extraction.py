@@ -1,11 +1,3 @@
-"""
-Memory Extraction Engine for the Context Memory Framework.
-
-Uses the configured LLM provider + Pydantic validation (with resilient
-rule-based detection for explicit definitions/corrections/temporary overrides)
-to extract semantic, episodic, and procedural memory candidates.
-"""
-
 from __future__ import annotations
 
 import json
@@ -15,11 +7,11 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import ValidationError
 from app.schemas.memory import ExtractedMemory, MemoryExtractionResult
-from app.services.llm_service import llm_service
+from app.services.llm import llm
 
 logger = logging.getLogger(__name__)
 
-_EXTRACTION_PROMPT_TEMPLATE = """You are a precision Context Memory Extraction engine for an enterprise NL2SQL database assistant.
+_PROMPT = """You are a precision Context Memory Extraction engine for an enterprise NL2SQL database assistant.
 
 Analyze the conversation turns below and extract ONLY durable, useful memory candidates supported directly by the user's statements.
 
@@ -59,7 +51,7 @@ Return ONLY valid JSON matching this exact structure (no markdown fences, no com
 If there are no meaningful memories to extract, return {{"memories": []}}.
 """
 
-_TEMP_OVERRIDE_PATTERNS = (
+_OVERRIDE_PATTERNS = (
     r"\bfor this (?:particular )?(?:report|query|request|time|once)\b",
     r"\bjust this once\b",
     r"\bonly for this\b",
@@ -67,7 +59,7 @@ _TEMP_OVERRIDE_PATTERNS = (
     r"\btemporarily\b",
 )
 
-_PERMANENT_CORRECTION_PATTERNS = (
+_RULE_CHANGE_PATTERNS = (
     r"\bdefinition has changed\b",
     r"\bfrom now on\b",
     r"\binstead of\b.*\balways\b",
@@ -77,19 +69,17 @@ _PERMANENT_CORRECTION_PATTERNS = (
 )
 
 
-def is_temporary_override(text: str) -> bool:
-    """Detect whether a user statement is a one-query temporary override."""
+def is_override(text: str) -> bool:
     lower = text.lower()
-    return any(re.search(pat, lower) for pat in _TEMP_OVERRIDE_PATTERNS)
+    return any(re.search(pattern, lower) for pattern in _OVERRIDE_PATTERNS)
 
 
-def is_permanent_correction(text: str) -> bool:
-    """Detect whether a user statement explicitly declares a permanent rule correction."""
+def is_rule_change(text: str) -> bool:
     lower = text.lower()
-    return any(re.search(pat, lower) for pat in _PERMANENT_CORRECTION_PATTERNS)
+    return any(re.search(pattern, lower) for pattern in _RULE_CHANGE_PATTERNS)
 
 
-def _clean_json_text(raw: str) -> str:
+def _strip_fences(raw: str) -> str:
     text = raw.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -100,21 +90,14 @@ def _clean_json_text(raw: str) -> str:
     return text.strip()
 
 
-class MemoryExtractionService:
-    """Extracts structured memory candidates from user interactions."""
-
-    def extract_memories(
+class MemoryExtractor:
+    def extract(
         self,
         conversation_messages: List[Dict[str, Any]],
         user_id: str,
         organization_id: str,
         connection_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Extract and validate memory candidates using LLM + Pydantic.
-
-        Never raises on extraction failure — returns [] and logs warning so
-        the primary NL2SQL workflow remains unaffected.
-        """
         if not conversation_messages:
             return []
 
@@ -126,40 +109,37 @@ class MemoryExtractionService:
         if not user_texts:
             return []
 
-        latest_user_msg = user_texts[-1]
-        # Guard: if the user's latest message is clearly a temporary one-query override,
-        # skip extracting a permanent rule from it.
-        if is_temporary_override(latest_user_msg) and not is_permanent_correction(latest_user_msg):
+        latest_message = user_texts[-1]
+        if is_override(latest_message) and not is_rule_change(latest_message):
             logger.info("Detected one-query temporary override; skipping permanent rule extraction.")
             return []
 
-        formatted_msgs = "\n".join(
+        transcript = "\n".join(
             f"{m.get('role', 'user').upper()}: {m.get('content', '')}"
             for m in conversation_messages
             if m.get("content")
         )
-        prompt = _EXTRACTION_PROMPT_TEMPLATE.format(messages_text=formatted_msgs)
+        prompt = _PROMPT.format(messages_text=transcript)
 
         try:
-            raw_output = llm_service.generate_with_context(prompt)
-            cleaned = _clean_json_text(raw_output)
+            raw_output = llm.generate(prompt)
+            cleaned = _strip_fences(raw_output)
             parsed = json.loads(cleaned)
         except Exception as exc:
             logger.warning("LLM memory extraction failed gracefully: %s", exc)
             return []
 
         raw_memories = parsed.get("memories", []) if isinstance(parsed, dict) else []
-        validated_list: List[Dict[str, Any]] = []
-        correction_detected = is_permanent_correction(latest_user_msg)
+        validated: List[Dict[str, Any]] = []
+        rule_change = is_rule_change(latest_message)
 
         for item in raw_memories:
             if not isinstance(item, dict):
                 continue
             try:
-                # Normalize fields before Pydantic validation
-                m_type = str(item.get("type", "semantic")).lower()
-                if m_type not in {"semantic", "episodic", "procedural"}:
-                    m_type = "semantic"
+                kind = str(item.get("type", "semantic")).lower()
+                if kind not in {"semantic", "episodic", "procedural"}:
+                    kind = "semantic"
                 scope = str(item.get("scope", "connection" if connection_id else "personal")).lower()
                 if scope not in {"personal", "connection", "organization"}:
                     scope = "personal"
@@ -168,7 +148,7 @@ class MemoryExtractionService:
                     visibility = "personal"
 
                 candidate = ExtractedMemory(
-                    type=m_type,
+                    type=kind,
                     subject=str(item.get("subject") or "general")[:120],
                     content=str(item.get("content") or "").strip(),
                     scope=scope,
@@ -180,22 +160,20 @@ class MemoryExtractionService:
                     continue
 
                 entry = candidate.model_dump()
-                entry["is_correction"] = bool(item.get("is_correction", False)) or correction_detected
-                validated_list.append(entry)
+                entry["is_correction"] = bool(item.get("is_correction", False)) or rule_change
+                validated.append(entry)
             except (ValidationError, ValueError, TypeError) as ve:
                 logger.debug("Skipping invalid extracted memory item %s: %s", item, ve)
 
-        # Validate overall container
         try:
             MemoryExtractionResult(
-                memories=[ExtractedMemory(**{k: v for k, v in m.items() if k != "is_correction"}) for m in validated_list]
+                memories=[ExtractedMemory(**{k: v for k, v in m.items() if k != "is_correction"}) for m in validated]
             )
         except ValidationError as ve:
             logger.warning("MemoryExtractionResult validation error: %s", ve)
             return []
 
-        return validated_list
+        return validated
 
 
-memory_extraction_service = MemoryExtractionService()
-
+extractor = MemoryExtractor()
