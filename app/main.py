@@ -1,17 +1,24 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import routes_health, routes_organizations, routes_users, routes_databases
+from app.api import (
+    routes_health,
+    routes_organizations,
+    routes_users,
+    routes_databases,
+    routes_chat,
+    routes_memories,
+)
 from app.database.connection import engine
-from app.models.base import Base
+from app.database.migrations import run_migrations
 # Import all models so Base metadata is aware of them
-from app.models import *
+from app.models import *  # noqa: F401, F403
 import os
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Run idempotent schema creation & migrations
+run_migrations(engine)
 
-app = FastAPI(title="Context Memory Framework API", version="1.0.0")
+app = FastAPI(title="Context Memory Framework API", version="2.0.0")
 
 # CORS setup
 app.add_middleware(
@@ -27,6 +34,8 @@ app.include_router(routes_health.router, prefix="/api")
 app.include_router(routes_organizations.router, prefix="/api")
 app.include_router(routes_users.router, prefix="/api")
 app.include_router(routes_databases.router, prefix="/api")
+app.include_router(routes_chat.router, prefix="/api")
+app.include_router(routes_memories.router, prefix="/api")
 
 # Serve frontend static files
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")

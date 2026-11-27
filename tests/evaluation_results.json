@@ -1,0 +1,32 @@
+{
+  "dataset_size": 120,
+  "categories": [
+    "business_rule_retrieval",
+    "conflicting_memory_resolution",
+    "cross_session_recall",
+    "exact_fact_recall",
+    "followup_query_understanding",
+    "semantic_fact_recall",
+    "temporal_recall",
+    "unrelated_memory_exclusion",
+    "user_isolation"
+  ],
+  "retrieval_metrics": {
+    "precision_at_3": 0.2485,
+    "recall_at_3": 0.7018,
+    "mrr": 0.6404,
+    "avg_retrieval_latency_ms": 89.801
+  },
+  "comparison": {
+    "baseline_nl2sql_without_memory": {
+      "rule_aware_sql_accuracy": 0.0083,
+      "avg_prompt_tokens": 73.5
+    },
+    "context_aware_nl2sql_with_memory": {
+      "rule_aware_sql_accuracy": 0.9667,
+      "avg_prompt_tokens": 613,
+      "memory_update_accuracy": 1.0,
+      "isolation_pass_rate": 1.0
+    }
+  }
+}

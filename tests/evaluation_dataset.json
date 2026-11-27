@@ -1,0 +1,1136 @@
+[
+  {
+    "id": "exact_1",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "revenue",
+    "memory": "Revenue excludes cancelled orders.",
+    "query": "Show monthly revenue excluding cancelled orders",
+    "expected_in_sql_hint": "revenue",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_2",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "active_customer",
+    "memory": "Active customers have status = 'active'.",
+    "query": "Count active customers",
+    "expected_in_sql_hint": "active_customer",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_3",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "profit",
+    "memory": "Profit is calculated as revenue minus expenses.",
+    "query": "Calculate quarterly profit",
+    "expected_in_sql_hint": "profit",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_4",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "fiscal_year",
+    "memory": "Financial year begins in April.",
+    "query": "Show current financial year sales",
+    "expected_in_sql_hint": "fiscal_year",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_5",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "client_table",
+    "memory": "Customer entity is represented by the clients table.",
+    "query": "List top customers",
+    "expected_in_sql_hint": "client_table",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_6",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "payment_status",
+    "memory": "Payment status column contains Paid, Pending, Cancelled.",
+    "query": "Breakdown by payment status",
+    "expected_in_sql_hint": "payment_status",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_7",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "churn_rate",
+    "memory": "Churned customers are those with no order in 90 days.",
+    "query": "Compute churn rate",
+    "expected_in_sql_hint": "churn_rate",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_8",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "net_margin",
+    "memory": "Net margin equals profit divided by revenue.",
+    "query": "Show net margin by region",
+    "expected_in_sql_hint": "net_margin",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_9",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "arpu",
+    "memory": "ARPU is monthly recurring revenue divided by active users.",
+    "query": "Calculate ARPU",
+    "expected_in_sql_hint": "arpu",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_10",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "aov",
+    "memory": "Average order value excludes zero-dollar trial orders.",
+    "query": "Show average order value",
+    "expected_in_sql_hint": "aov",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_11",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "vip_tier",
+    "memory": "VIP customers have lifetime spend above 50000.",
+    "query": "List VIP customers",
+    "expected_in_sql_hint": "vip_tier",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_12",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "refund_window",
+    "memory": "Refunds are tracked in the credit_notes table.",
+    "query": "Summarize monthly refunds",
+    "expected_in_sql_hint": "refund_window",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_13",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "tax_rate",
+    "memory": "GST is excluded from net revenue calculations.",
+    "query": "Show net revenue without tax",
+    "expected_in_sql_hint": "tax_rate",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_14",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "lead_source",
+    "memory": "Marketing attribution uses the utm_source column.",
+    "query": "Top marketing lead sources",
+    "expected_in_sql_hint": "lead_source",
+    "should_retrieve": true
+  },
+  {
+    "id": "exact_15",
+    "category": "exact_fact_recall",
+    "memory_type": "semantic",
+    "subject": "vendor_due",
+    "memory": "Outstanding vendor payment means invoice_status = 'unpaid'.",
+    "query": "Top 10 vendors by outstanding payment",
+    "expected_in_sql_hint": "vendor_due",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_1",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "gross_sales",
+    "memory": "Total bookings equal sum of confirmed contract values.",
+    "query": "How much did we book this quarter?",
+    "expected_in_sql_hint": "gross_sales",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_2",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "headcount",
+    "memory": "Full-time employees have employment_type = 'FTE'.",
+    "query": "How many salaried permanent staff do we have?",
+    "expected_in_sql_hint": "headcount",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_3",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "late_shipment",
+    "memory": "Delayed deliveries are orders shipped after promised_date.",
+    "query": "Which parcels arrived past their deadline?",
+    "expected_in_sql_hint": "late_shipment",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_4",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "inventory_val",
+    "memory": "Stock valuation uses unit_cost multiplied by on_hand_qty.",
+    "query": "What is the warehouse merchandise worth?",
+    "expected_in_sql_hint": "inventory_val",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_5",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "support_sla",
+    "memory": "SLA breach occurs when first_response_minutes > 60.",
+    "query": "How many tickets missed the one-hour response target?",
+    "expected_in_sql_hint": "support_sla",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_6",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "b2b_segment",
+    "memory": "Enterprise accounts have employee_count >= 500.",
+    "query": "Show revenue from large corporate clients",
+    "expected_in_sql_hint": "b2b_segment",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_7",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "repeat_buyer",
+    "memory": "Returning buyers are accounts with more than 1 completed purchase.",
+    "query": "Count repeat shoppers",
+    "expected_in_sql_hint": "repeat_buyer",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_8",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "discount_cap",
+    "memory": "Promotional discounts are stored in promo_deduction column.",
+    "query": "How much markdown was applied?",
+    "expected_in_sql_hint": "discount_cap",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_9",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "region_apac",
+    "memory": "APAC region includes India, Singapore, and Japan.",
+    "query": "Show Asia-Pacific turnover",
+    "expected_in_sql_hint": "region_apac",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_10",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "bad_debt",
+    "memory": "Write-offs are invoices overdue by more than 180 days.",
+    "query": "Total uncollectible receivables",
+    "expected_in_sql_hint": "bad_debt",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_11",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "active_sub",
+    "memory": "Live subscriptions have cancel_date IS NULL.",
+    "query": "Number of ongoing memberships",
+    "expected_in_sql_hint": "active_sub",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_12",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "gross_margin",
+    "memory": "Gross margin is (net_sales - cogs) / net_sales.",
+    "query": "Show product profitability percentage",
+    "expected_in_sql_hint": "gross_margin",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_13",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "warehouse_east",
+    "memory": "East hub corresponds to facility_code = 'WH-E1'.",
+    "query": "Inventory stored in the eastern depot",
+    "expected_in_sql_hint": "warehouse_east",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_14",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "trial_conv",
+    "memory": "Converted trials have upgraded_at IS NOT NULL.",
+    "query": "Trial-to-paid conversion count",
+    "expected_in_sql_hint": "trial_conv",
+    "should_retrieve": true
+  },
+  {
+    "id": "semantic_15",
+    "category": "semantic_fact_recall",
+    "memory_type": "semantic",
+    "subject": "on_time_pay",
+    "memory": "Prompt payers settle invoices within 15 days of issue.",
+    "query": "Clients who pay bills quickly",
+    "expected_in_sql_hint": "on_time_pay",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_1",
+    "category": "business_rule_retrieval",
+    "memory_type": "procedural",
+    "subject": "date_col",
+    "memory": "Always use invoice_date for financial reports.",
+    "query": "Generate quarterly financial report",
+    "expected_in_sql_hint": "date_col",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_2",
+    "category": "business_rule_retrieval",
+    "memory_type": "procedural",
+    "subject": "currency",
+    "memory": "Display monetary results in INR.",
+    "query": "Show total revenue by city",
+    "expected_in_sql_hint": "currency",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_3",
+    "category": "business_rule_retrieval",
+    "memory_type": "procedural",
+    "subject": "agg_grain",
+    "memory": "Prefer monthly aggregation for financial summaries.",
+    "query": "Give me a financial summary for 2026",
+    "expected_in_sql_hint": "agg_grain",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_4",
+    "category": "business_rule_retrieval",
+    "memory_type": "procedural",
+    "subject": "fiscal_apr",
+    "memory": "Financial year runs from April 1 to March 31.",
+    "query": "Show FY revenue comparison",
+    "expected_in_sql_hint": "fiscal_apr",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_5",
+    "category": "business_rule_retrieval",
+    "memory_type": "procedural",
+    "subject": "exclude_test",
+    "memory": "Exclude internal test accounts where email LIKE '%@test.local'.",
+    "query": "Count real user signups",
+    "expected_in_sql_hint": "exclude_test",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_6",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "tz_ist",
+    "memory": "Convert UTC timestamps to Asia/Kolkata for daily reports.",
+    "query": "Daily order counts",
+    "expected_in_sql_hint": "tz_ist",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_7",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "null_handling",
+    "memory": "Treat NULL discount as 0 using COALESCE(discount, 0).",
+    "query": "Net amount after discount",
+    "expected_in_sql_hint": "null_handling",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_8",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "top_n",
+    "memory": "Default limit for leaderboard queries is 10 rows.",
+    "query": "Show top performing sales reps",
+    "expected_in_sql_hint": "top_n",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_9",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "rounding",
+    "memory": "Round financial percentages to 2 decimal places.",
+    "query": "Calculate profit margin",
+    "expected_in_sql_hint": "rounding",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_10",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "region_map",
+    "memory": "Combine Delhi and NCR under North India.",
+    "query": "North India sales breakdown",
+    "expected_in_sql_hint": "region_map",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_11",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "active_prod",
+    "memory": "Exclude discontinued products where is_archived = true.",
+    "query": "List catalog products by sales",
+    "expected_in_sql_hint": "active_prod",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_12",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "join_key",
+    "memory": "Join orders and customers on customer_uuid.",
+    "query": "Show customer order totals",
+    "expected_in_sql_hint": "join_key",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_13",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "fx_rate",
+    "memory": "Convert USD amounts to INR using fx_rates table.",
+    "query": "Consolidated revenue in INR",
+    "expected_in_sql_hint": "fx_rate",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_14",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "soft_del",
+    "memory": "Always filter deleted_at IS NULL on transactions.",
+    "query": "Total completed transactions",
+    "expected_in_sql_hint": "soft_del",
+    "should_retrieve": true
+  },
+  {
+    "id": "rule_15",
+    "category": "business_rule_retrieval",
+    "memory_type": "semantic",
+    "subject": "b2c_filter",
+    "memory": "Retail channel corresponds to channel = 'B2C'.",
+    "query": "Show retail channel revenue",
+    "expected_in_sql_hint": "b2c_filter",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_1",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_0",
+    "old_memory": "Legacy reporting module 0 previously used PostgreSQL.",
+    "new_memory": "Reporting module 0 now uses MongoDB.",
+    "current_query": "Which database does reporting module 0 use?",
+    "historical_query": "What did reporting module 0 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_2",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_1",
+    "old_memory": "Legacy reporting module 1 previously used PostgreSQL.",
+    "new_memory": "Reporting module 1 now uses MongoDB.",
+    "current_query": "Which database does reporting module 1 use?",
+    "historical_query": "What did reporting module 1 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_3",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_2",
+    "old_memory": "Legacy reporting module 2 previously used PostgreSQL.",
+    "new_memory": "Reporting module 2 now uses MongoDB.",
+    "current_query": "Which database does reporting module 2 use?",
+    "historical_query": "What did reporting module 2 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_4",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_3",
+    "old_memory": "Legacy reporting module 3 previously used PostgreSQL.",
+    "new_memory": "Reporting module 3 now uses MongoDB.",
+    "current_query": "Which database does reporting module 3 use?",
+    "historical_query": "What did reporting module 3 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_5",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_4",
+    "old_memory": "Legacy reporting module 4 previously used PostgreSQL.",
+    "new_memory": "Reporting module 4 now uses MongoDB.",
+    "current_query": "Which database does reporting module 4 use?",
+    "historical_query": "What did reporting module 4 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_6",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_5",
+    "old_memory": "Legacy reporting module 5 previously used PostgreSQL.",
+    "new_memory": "Reporting module 5 now uses MongoDB.",
+    "current_query": "Which database does reporting module 5 use?",
+    "historical_query": "What did reporting module 5 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_7",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_6",
+    "old_memory": "Legacy reporting module 6 previously used PostgreSQL.",
+    "new_memory": "Reporting module 6 now uses MongoDB.",
+    "current_query": "Which database does reporting module 6 use?",
+    "historical_query": "What did reporting module 6 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_8",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_7",
+    "old_memory": "Legacy reporting module 7 previously used PostgreSQL.",
+    "new_memory": "Reporting module 7 now uses MongoDB.",
+    "current_query": "Which database does reporting module 7 use?",
+    "historical_query": "What did reporting module 7 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_9",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_8",
+    "old_memory": "Legacy reporting module 8 previously used PostgreSQL.",
+    "new_memory": "Reporting module 8 now uses MongoDB.",
+    "current_query": "Which database does reporting module 8 use?",
+    "historical_query": "What did reporting module 8 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_10",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_9",
+    "old_memory": "Legacy reporting module 9 previously used PostgreSQL.",
+    "new_memory": "Reporting module 9 now uses MongoDB.",
+    "current_query": "Which database does reporting module 9 use?",
+    "historical_query": "What did reporting module 9 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_11",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_10",
+    "old_memory": "Legacy reporting module 10 previously used PostgreSQL.",
+    "new_memory": "Reporting module 10 now uses MongoDB.",
+    "current_query": "Which database does reporting module 10 use?",
+    "historical_query": "What did reporting module 10 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "temporal_12",
+    "category": "temporal_recall",
+    "memory_type": "semantic",
+    "subject": "system_stack_11",
+    "old_memory": "Legacy reporting module 11 previously used PostgreSQL.",
+    "new_memory": "Reporting module 11 now uses MongoDB.",
+    "current_query": "Which database does reporting module 11 use?",
+    "historical_query": "What did reporting module 11 previously use?",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_1",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_0",
+    "old_memory": "Metric 0 excludes cancelled orders only.",
+    "new_memory": "Metric 0 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 0 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_2",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_1",
+    "old_memory": "Metric 1 excludes cancelled orders only.",
+    "new_memory": "Metric 1 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 1 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_3",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_2",
+    "old_memory": "Metric 2 excludes cancelled orders only.",
+    "new_memory": "Metric 2 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 2 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_4",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_3",
+    "old_memory": "Metric 3 excludes cancelled orders only.",
+    "new_memory": "Metric 3 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 3 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_5",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_4",
+    "old_memory": "Metric 4 excludes cancelled orders only.",
+    "new_memory": "Metric 4 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 4 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_6",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_5",
+    "old_memory": "Metric 5 excludes cancelled orders only.",
+    "new_memory": "Metric 5 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 5 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_7",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_6",
+    "old_memory": "Metric 6 excludes cancelled orders only.",
+    "new_memory": "Metric 6 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 6 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_8",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_7",
+    "old_memory": "Metric 7 excludes cancelled orders only.",
+    "new_memory": "Metric 7 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 7 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_9",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_8",
+    "old_memory": "Metric 8 excludes cancelled orders only.",
+    "new_memory": "Metric 8 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 8 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_10",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_9",
+    "old_memory": "Metric 9 excludes cancelled orders only.",
+    "new_memory": "Metric 9 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 9 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_11",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_10",
+    "old_memory": "Metric 10 excludes cancelled orders only.",
+    "new_memory": "Metric 10 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 10 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "conflict_12",
+    "category": "conflicting_memory_resolution",
+    "memory_type": "semantic",
+    "subject": "metric_rule_11",
+    "old_memory": "Metric 11 excludes cancelled orders only.",
+    "new_memory": "Metric 11 excludes both cancelled and refunded orders.",
+    "query": "Calculate metric 11 total",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_1",
+    "category": "followup_query_understanding",
+    "previous_query": "Show top 10 customers by revenue",
+    "query": "Only show customers from Delhi",
+    "expected_context_token": "Delhi",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_2",
+    "category": "followup_query_understanding",
+    "previous_query": "List monthly sales for 2026",
+    "query": "Sort them in descending order",
+    "expected_context_token": "DESC",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_3",
+    "category": "followup_query_understanding",
+    "previous_query": "Show product categories by profit",
+    "query": "Limit to top 5",
+    "expected_context_token": "LIMIT 5",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_4",
+    "category": "followup_query_understanding",
+    "previous_query": "Show orders by region",
+    "query": "Filter for paid status only",
+    "expected_context_token": "paid",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_5",
+    "category": "followup_query_understanding",
+    "previous_query": "Count active users per plan",
+    "query": "Exclude free tier",
+    "expected_context_token": "free",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_6",
+    "category": "followup_query_understanding",
+    "previous_query": "Show quarterly expenses",
+    "query": "Break down by department",
+    "expected_context_token": "department",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_7",
+    "category": "followup_query_understanding",
+    "previous_query": "List vendors by payable amount",
+    "query": "Show only amounts over 10000",
+    "expected_context_token": "10000",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_8",
+    "category": "followup_query_understanding",
+    "previous_query": "Show daily signups last week",
+    "query": "Order by signup count descending",
+    "expected_context_token": "DESC",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_9",
+    "category": "followup_query_understanding",
+    "previous_query": "Compare Q1 and Q2 revenue",
+    "query": "Filter for B2B segment",
+    "expected_context_token": "B2B",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_10",
+    "category": "followup_query_understanding",
+    "previous_query": "Show average ticket resolution time",
+    "query": "Only priority = high",
+    "expected_context_token": "high",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_11",
+    "category": "followup_query_understanding",
+    "previous_query": "Top selling SKUs",
+    "query": "Exclude archived products",
+    "expected_context_token": "archived",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_12",
+    "category": "followup_query_understanding",
+    "previous_query": "Monthly refund volume",
+    "query": "Show only Mumbai branch",
+    "expected_context_token": "Mumbai",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_13",
+    "category": "followup_query_understanding",
+    "previous_query": "Customer retention by cohort",
+    "query": "Limit to 2026 cohorts",
+    "expected_context_token": "2026",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_14",
+    "category": "followup_query_understanding",
+    "previous_query": "Show warehouse stock levels",
+    "query": "Only items below reorder point",
+    "expected_context_token": "reorder",
+    "should_retrieve": true
+  },
+  {
+    "id": "followup_15",
+    "category": "followup_query_understanding",
+    "previous_query": "List overdue invoices",
+    "query": "Sort by due date ascending",
+    "expected_context_token": "ASC",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_1",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_0",
+    "memory": "KPI_0 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_0 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_2",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_1",
+    "memory": "KPI_1 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_1 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_3",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_2",
+    "memory": "KPI_2 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_2 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_4",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_3",
+    "memory": "KPI_3 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_3 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_5",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_4",
+    "memory": "KPI_4 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_4 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_6",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_5",
+    "memory": "KPI_5 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_5 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_7",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_6",
+    "memory": "KPI_6 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_6 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_8",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_7",
+    "memory": "KPI_7 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_7 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_9",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_8",
+    "memory": "KPI_8 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_8 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_10",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_9",
+    "memory": "KPI_9 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_9 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_11",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_10",
+    "memory": "KPI_10 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_10 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "cross_session_12",
+    "category": "cross_session_recall",
+    "memory_type": "semantic",
+    "subject": "kpi_11",
+    "memory": "KPI_11 requires filtering status = 'settled' and excluding test_flag = 1.",
+    "query": "Report KPI_11 by month",
+    "should_retrieve": true
+  },
+  {
+    "id": "unrelated_1",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_0",
+    "memory": "Employee leave policy 0 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_2",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_1",
+    "memory": "Employee leave policy 1 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_3",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_2",
+    "memory": "Employee leave policy 2 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_4",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_3",
+    "memory": "Employee leave policy 3 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_5",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_4",
+    "memory": "Employee leave policy 4 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_6",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_5",
+    "memory": "Employee leave policy 5 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_7",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_6",
+    "memory": "Employee leave policy 6 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_8",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_7",
+    "memory": "Employee leave policy 7 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_9",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_8",
+    "memory": "Employee leave policy 8 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_10",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_9",
+    "memory": "Employee leave policy 9 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_11",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_10",
+    "memory": "Employee leave policy 10 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "unrelated_12",
+    "category": "unrelated_memory_exclusion",
+    "memory_type": "semantic",
+    "subject": "hr_policy_11",
+    "memory": "Employee leave policy 11 grants 20 annual days.",
+    "query": "Show total invoice revenue by product category",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_1",
+    "category": "user_isolation",
+    "isolation_type": "tenant",
+    "memory": "Confidential secret rule 0 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 0",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_2",
+    "category": "user_isolation",
+    "isolation_type": "user_personal",
+    "memory": "Confidential secret rule 1 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 1",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_3",
+    "category": "user_isolation",
+    "isolation_type": "tenant",
+    "memory": "Confidential secret rule 2 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 2",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_4",
+    "category": "user_isolation",
+    "isolation_type": "user_personal",
+    "memory": "Confidential secret rule 3 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 3",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_5",
+    "category": "user_isolation",
+    "isolation_type": "tenant",
+    "memory": "Confidential secret rule 4 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 4",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_6",
+    "category": "user_isolation",
+    "isolation_type": "user_personal",
+    "memory": "Confidential secret rule 5 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 5",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_7",
+    "category": "user_isolation",
+    "isolation_type": "tenant",
+    "memory": "Confidential secret rule 6 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 6",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_8",
+    "category": "user_isolation",
+    "isolation_type": "user_personal",
+    "memory": "Confidential secret rule 7 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 7",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_9",
+    "category": "user_isolation",
+    "isolation_type": "tenant",
+    "memory": "Confidential secret rule 8 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 8",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_10",
+    "category": "user_isolation",
+    "isolation_type": "user_personal",
+    "memory": "Confidential secret rule 9 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 9",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_11",
+    "category": "user_isolation",
+    "isolation_type": "tenant",
+    "memory": "Confidential secret rule 10 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 10",
+    "should_retrieve": false
+  },
+  {
+    "id": "isolation_12",
+    "category": "user_isolation",
+    "isolation_type": "user_personal",
+    "memory": "Confidential secret rule 11 for Tenant A / User A1 only.",
+    "query": "Confidential secret rule 11",
+    "should_retrieve": false
+  }
+]

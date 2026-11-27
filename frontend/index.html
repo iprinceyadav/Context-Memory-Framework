@@ -13,7 +13,7 @@
 </head>
 <body>
     <div class="app-container">
-        
+
         <!-- View 1: Landing Page -->
         <section id="view-landing" class="view-section active">
             <div class="landing-content">
@@ -21,40 +21,39 @@
                 <h1 class="landing-title">Context Memory Framework</h1>
                 <p class="landing-subtitle">Ask your database questions in plain English.</p>
                 <p class="landing-description">
-                    Connect your relational database, explore its schema, and turn natural language into executable SQL with contextual AI.
+                    Connect your relational database, build persistent business context memory, and turn natural language into accurate, context-aware SQL across sessions.
                 </p>
                 <div class="landing-actions">
                     <button id="btn-start-connect" class="btn-primary">Connect Database</button>
-                    <button id="btn-demo" class="btn-secondary">Explore Demo</button>
+                    <button id="btn-demo" class="btn-secondary">Open Workspace</button>
                 </div>
                 <div class="tech-indicators">
-                    <span>PostgreSQL</span> • <span>MySQL</span> • <span>SQLite</span> • <span>Natural Language → SQL</span>
+                    <span>PostgreSQL</span> • <span>MySQL</span> • <span>SQLite</span> • <span>Persistent Agent Memory</span>
                 </div>
-                
+
                 <div class="hero-visual">
                     <div class="visual-header">
                         <div class="dots"><span></span><span></span><span></span></div>
-                        <div class="visual-title">CMF Intelligence</div>
+                        <div class="visual-title">CMF Context-Aware Intelligence</div>
                     </div>
                     <div class="visual-body">
                         <div class="visual-step">
                             <span class="v-label">QUESTION</span>
-                            <span class="v-text">Show me the top 5 customers by total spending.</span>
+                            <span class="v-text">Show monthly revenue for the current financial year.</span>
                         </div>
                         <div class="visual-arrow">↓</div>
                         <div class="visual-step">
-                            <span class="v-label">CONTEXT RETRIEVED</span>
-                            <span class="v-code">customers, orders, order_items</span>
+                            <span class="v-label">PERSISTENT MEMORIES + SCHEMA RETRIEVED</span>
+                            <span class="v-code">Semantic: Revenue excludes cancelled orders • Procedural: Use invoice_date</span>
                         </div>
                         <div class="visual-arrow">↓</div>
                         <div class="visual-step">
                             <span class="v-label">GENERATED SQL</span>
-                            <pre><code><span class="sql-keyword">SELECT</span> c.name, <span class="sql-function">SUM</span>(o.total) <span class="sql-keyword">AS</span> spending
-<span class="sql-keyword">FROM</span> customers c
-<span class="sql-keyword">JOIN</span> orders o <span class="sql-keyword">ON</span> c.id = o.customer_id
-<span class="sql-keyword">GROUP BY</span> c.name
-<span class="sql-keyword">ORDER BY</span> spending <span class="sql-keyword">DESC</span>
-<span class="sql-keyword">LIMIT</span> <span class="sql-number">5</span>;</code></pre>
+                            <pre><code><span class="sql-keyword">SELECT</span> DATE_TRUNC(<span class="sql-string">'month'</span>, invoice_date) <span class="sql-keyword">AS</span> month, <span class="sql-function">SUM</span>(amount) <span class="sql-keyword">AS</span> revenue
+<span class="sql-keyword">FROM</span> invoices
+<span class="sql-keyword">WHERE</span> status != <span class="sql-string">'cancelled'</span>
+<span class="sql-keyword">GROUP BY</span> month
+<span class="sql-keyword">ORDER BY</span> month;</code></pre>
                         </div>
                     </div>
                 </div>
@@ -69,7 +68,7 @@
                     <p>Select your database type to get started.</p>
                 </div>
                 <div class="modal-body">
-                    
+
                     <!-- Step 1: Choose Database -->
                     <div id="connect-step-1" class="connect-step active">
                         <div class="db-options">
@@ -106,15 +105,15 @@
                             <span id="selected-db-name">PostgreSQL</span>
                             <button id="btn-change-db" class="btn-text">Change</button>
                         </div>
-                        
+
                         <form id="connection-form">
                             <input type="hidden" id="db-type" value="postgresql">
-                            
+
                             <div class="form-group pg-my-only">
                                 <label for="db-host">Host</label>
                                 <input type="text" id="db-host" placeholder="localhost or IP address" value="localhost">
                             </div>
-                            
+
                             <div class="form-row pg-my-only">
                                 <div class="form-group">
                                     <label for="db-port">Port</label>
@@ -139,14 +138,14 @@
 
                             <div class="form-group sqlite-only hidden">
                                 <label for="sqlite-path">Database File Path (or Name)</label>
-                                <input type="text" id="sqlite-path" placeholder="e.g. data.db" required>
+                                <input type="text" id="sqlite-path" placeholder="e.g. sales_demo.db">
                             </div>
 
                             <div class="security-notice">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                                 Credentials are encrypted and stored securely.
                             </div>
-                            
+
                             <div class="modal-actions space-between">
                                 <button type="button" id="btn-test-connection" class="btn-secondary">Test Connection</button>
                                 <button type="submit" id="btn-connect-sync" class="btn-primary">Connect & Sync</button>
@@ -173,33 +172,63 @@
 
         <!-- View 3: Main Workspace -->
         <section id="view-workspace" class="view-section hidden">
-            
+
             <!-- Left Sidebar -->
             <aside class="sidebar-left">
                 <div class="sidebar-header">
                     <div class="logo-mark small">CMF</div>
                     <span class="brand-text">Context Memory</span>
                 </div>
-                
+
+                <!-- Navigation Tabs -->
+                <nav class="sidebar-nav">
+                    <button class="nav-tab active" data-tab="chat">
+                        <span>SQL Assistant</span>
+                    </button>
+                    <button class="nav-tab" data-tab="memories">
+                        <span>Memory Dashboard</span>
+                        <span id="nav-pending-badge" class="nav-badge hidden">0</span>
+                    </button>
+                    <button class="nav-tab" data-tab="inspector">
+                        <span>Context Inspector</span>
+                    </button>
+                    <button class="nav-tab" data-tab="knowledge">
+                        <span>Business Knowledge</span>
+                    </button>
+                    <button class="nav-tab" data-tab="evaluation">
+                        <span>Evaluation</span>
+                    </button>
+                </nav>
+
                 <div class="db-status-section">
                     <div class="section-title">CURRENT DATABASE</div>
                     <div class="active-db-card">
-                        <div class="db-icon small">PG</div>
+                        <div class="db-icon small" id="workspace-db-badge">DB</div>
                         <div class="db-meta">
-                            <div class="db-name" id="workspace-db-name">sales_db</div>
-                            <div class="db-status"><span class="status-dot"></span>Connected</div>
+                            <div class="db-name" id="workspace-db-name">Not connected</div>
+                            <div class="db-status"><span class="status-dot"></span>Ready</div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Conversations History -->
+                <div class="conversations-section">
+                    <div class="section-title space-between" style="display:flex;align-items:center;">
+                        <span>CONVERSATIONS</span>
+                        <button id="btn-new-chat" class="btn-text small" title="New Conversation">+ New</button>
+                    </div>
+                    <div id="conversations-list" class="conversations-list">
+                        <div class="schema-placeholder">No conversations yet</div>
                     </div>
                 </div>
 
                 <div class="explorer-section">
                     <div class="section-title">DATABASE EXPLORER</div>
                     <div class="schema-tree" id="schema-tree">
-                        <!-- Mocked or populated schema tree -->
-                        <div class="schema-placeholder">Run a query to build context...</div>
+                        <div class="schema-placeholder">Run a query to inspect tables...</div>
                     </div>
                 </div>
-                
+
                 <div class="sidebar-footer">
                     <button id="btn-disconnect" class="btn-text text-danger">Disconnect</button>
                 </div>
@@ -207,65 +236,211 @@
 
             <!-- Center Workspace -->
             <main class="workspace-main">
-                <header class="workspace-header">
-                    <div class="header-titles">
-                        <h2>Ask your database</h2>
-                        <p>Describe what you want to know. CMF will use your database context to generate and execute SQL.</p>
-                    </div>
-                </header>
 
-                <div class="chat-container" id="chat-container">
-                    
-                    <!-- Empty State -->
-                    <div class="empty-state" id="workspace-empty">
-                        <div class="empty-icon">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                <!-- TAB 1: Chat -->
+                <div id="tab-chat" class="workspace-tab active">
+                    <header class="workspace-header space-between" style="display:flex;align-items:center;">
+                        <div class="header-titles">
+                            <h2>Context-Aware NL2SQL Assistant</h2>
+                            <p>Combines live schema, persistent business memory, and conversation history.</p>
                         </div>
-                        <h3>Your database is connected.</h3>
-                        <p>Start by asking a question about your data.</p>
-                        
-                        <div class="suggestion-chips">
-                            <button class="suggestion-chip">Top 5 customers by revenue</button>
-                            <button class="suggestion-chip">Show monthly sales trends</button>
-                            <button class="suggestion-chip">List recent incomplete orders</button>
-                        </div>
+                        <button id="btn-toggle-right-panel" class="btn-secondary small-btn">Toggle SQL Panel</button>
+                    </header>
+
+                    <div id="pending-memory-banner" class="pending-banner hidden">
+                        <span id="pending-banner-text">New memory candidates extracted from conversation.</span>
+                        <button id="btn-review-pending" class="btn-text small" style="color:var(--accent-primary);">Review & Approve →</button>
                     </div>
 
-                    <!-- Chat History -->
-                    <div class="chat-history" id="chat-history">
-                        <!-- Messages injected here -->
+                    <div class="chat-container" id="chat-container">
+                        <!-- Empty State -->
+                        <div class="empty-state" id="workspace-empty">
+                            <div class="empty-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                            </div>
+                            <h3>Your context-aware assistant is ready.</h3>
+                            <p>Ask a question or teach a business rule like "For all revenue reports, exclude cancelled orders."</p>
+
+                            <div class="suggestion-chips">
+                                <button class="suggestion-chip">Show monthly revenue</button>
+                                <button class="suggestion-chip">Top 10 customers by revenue</button>
+                                <button class="suggestion-chip">For all revenue reports, exclude cancelled orders</button>
+                            </div>
+                        </div>
+
+                        <!-- Chat History -->
+                        <div class="chat-history" id="chat-history"></div>
                     </div>
-                    
+
+                    <div class="query-composer-wrapper">
+                        <div class="query-composer">
+                            <textarea id="query-input" placeholder="Ask about your data or teach a business definition..." rows="1"></textarea>
+                            <div class="composer-actions">
+                                <div class="shortcut-hint">Enter ↵</div>
+                                <button id="btn-send-query" class="btn-primary icon-btn" title="Send">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="query-composer-wrapper">
-                    <div class="query-composer">
-                        <textarea id="query-input" placeholder="Ask anything about your database..." rows="1"></textarea>
-                        <div class="composer-actions">
-                            <div class="shortcut-hint">Press Enter ↵</div>
-                            <button id="btn-send-query" class="btn-primary icon-btn">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                            </button>
+                <!-- TAB 2: Memory Dashboard -->
+                <div id="tab-memories" class="workspace-tab hidden">
+                    <header class="workspace-header space-between" style="display:flex;align-items:center;">
+                        <div class="header-titles">
+                            <h2>Memory Dashboard</h2>
+                            <p>Manage, approve, search, and audit persistent business, procedural, and episodic memories.</p>
+                        </div>
+                        <button id="btn-refresh-memories" class="btn-secondary small-btn">Refresh</button>
+                    </header>
+
+                    <div class="dashboard-body">
+                        <div class="stats-grid" id="memory-stats-grid">
+                            <div class="stat-card"><div class="stat-label">Total Memories</div><div class="stat-value" id="stat-total">0</div></div>
+                            <div class="stat-card"><div class="stat-label">Active (Approved)</div><div class="stat-value text-success" id="stat-active">0</div></div>
+                            <div class="stat-card"><div class="stat-label">Pending Review</div><div class="stat-value text-warning" id="stat-pending">0</div></div>
+                            <div class="stat-card"><div class="stat-label">Superseded</div><div class="stat-value" id="stat-superseded">0</div></div>
+                        </div>
+
+                        <div class="memory-toolbar">
+                            <input type="text" id="memory-search-input" placeholder="Semantic search across memories..." />
+                            <select id="memory-filter-type">
+                                <option value="">All Types</option>
+                                <option value="semantic">Semantic</option>
+                                <option value="procedural">Procedural</option>
+                                <option value="episodic">Episodic</option>
+                            </select>
+                            <select id="memory-filter-status">
+                                <option value="">All Statuses</option>
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="superseded">Superseded</option>
+                            </select>
+                            <button id="btn-search-memories" class="btn-primary small-btn">Search</button>
+                        </div>
+
+                        <div id="memory-list" class="memory-list">
+                            <div class="schema-placeholder">Loading memories...</div>
                         </div>
                     </div>
                 </div>
+
+                <!-- TAB 3: Context Inspector -->
+                <div id="tab-inspector" class="workspace-tab hidden">
+                    <header class="workspace-header">
+                        <div class="header-titles">
+                            <h2>Context Inspector</h2>
+                            <p>Inspect retrieved memories, hybrid ranking scores, excluded records, and token budget usage.</p>
+                        </div>
+                    </header>
+                    <div class="dashboard-body" id="inspector-body">
+                        <div class="schema-placeholder">Run a query in SQL Assistant to inspect the exact context injected into the LLM prompt.</div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: Business Knowledge Manager -->
+                <div id="tab-knowledge" class="workspace-tab hidden">
+                    <header class="workspace-header">
+                        <div class="header-titles">
+                            <h2>Business Knowledge Manager</h2>
+                            <p>Explicitly define business terminology, revenue formulas, database conventions, and reporting preferences.</p>
+                        </div>
+                    </header>
+                    <div class="dashboard-body">
+                        <form id="knowledge-form" class="knowledge-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bk-type">Knowledge Category</label>
+                                    <select id="bk-type">
+                                        <option value="semantic">Semantic (Business Definition / Formula)</option>
+                                        <option value="procedural">Procedural (Reporting / Formatting Rule)</option>
+                                        <option value="episodic">Episodic (Historical Note)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bk-subject">Subject / Metric Key</label>
+                                    <input type="text" id="bk-subject" placeholder="e.g. revenue, active_customers, financial_year" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bk-content">Rule or Definition</label>
+                                <textarea id="bk-content" rows="3" placeholder="e.g. Revenue is the sum of invoice amounts excluding cancelled and refunded invoices." required></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bk-scope">Scope</label>
+                                    <select id="bk-scope">
+                                        <option value="connection">Current Database Connection</option>
+                                        <option value="personal">Personal (All Databases)</option>
+                                        <option value="organization">Organization-Wide</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bk-visibility">Visibility</label>
+                                    <select id="bk-visibility">
+                                        <option value="personal">Personal</option>
+                                        <option value="shared">Shared (Team / Tenant)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bk-importance">Importance (1–10)</label>
+                                    <input type="number" id="bk-importance" min="1" max="10" value="8">
+                                </div>
+                            </div>
+                            <div class="form-group checkbox-row">
+                                <input type="checkbox" id="bk-auto-approve">
+                                <label for="bk-auto-approve">Confirm & activate immediately (skip pending review queue)</label>
+                            </div>
+                            <div class="modal-actions">
+                                <button type="submit" class="btn-primary">Save Business Knowledge</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- TAB 5: Evaluation Benchmark -->
+                <div id="tab-evaluation" class="workspace-tab hidden">
+                    <header class="workspace-header space-between" style="display:flex;align-items:center;">
+                        <div class="header-titles">
+                            <h2>Evaluation Benchmark</h2>
+                            <p>View <code>evaluation_results.json</code> metrics and browse <code>evaluation_dataset.json</code> test cases.</p>
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <button id="btn-refresh-evaluation" class="btn-secondary small-btn">Refresh</button>
+                            <button id="btn-run-evaluation" class="btn-primary small-btn">Run Benchmark</button>
+                        </div>
+                    </header>
+                    <div class="dashboard-body" id="evaluation-body">
+                        <div class="schema-placeholder">Loading evaluation results...</div>
+                    </div>
+                </div>
+
             </main>
 
-            <!-- Right Sidebar (Context Panel) -->
+            <!-- Right Sidebar (SQL & Context Quick Panel) -->
             <aside class="sidebar-right collapsed" id="context-panel-wrapper">
                 <div class="sidebar-right-header">
-                    <h3>Context</h3>
+                    <h3>Query Context</h3>
                     <button id="btn-close-context" class="btn-icon">×</button>
                 </div>
                 <div class="context-content">
-                    
+
                     <div class="context-block">
-                        <div class="block-label">Context Retrieved</div>
+                        <div class="block-label">Tables Used</div>
                         <ul class="retrieved-tables" id="context-tables-list">
                             <li class="placeholder">Waiting for query...</li>
                         </ul>
                     </div>
-                    
+
+                    <div class="context-block">
+                        <div class="block-label">Active Memories Injected</div>
+                        <ul class="retrieved-memories-mini" id="context-memories-list">
+                            <li class="placeholder">No memories injected yet</li>
+                        </ul>
+                    </div>
+
                     <div class="context-block">
                         <div class="block-label space-between">
                             <span>Generated SQL</span>
@@ -274,15 +449,27 @@
                         <div class="sql-viewer">
                             <pre><code id="context-sql-code">/* SQL will appear here */</code></pre>
                         </div>
-                        <div class="execution-meta" id="context-exec-meta">
-                            <!-- Execution time / rows will appear here -->
-                        </div>
+                        <div class="execution-meta" id="context-exec-meta"></div>
                     </div>
 
                 </div>
             </aside>
 
         </section>
+    </div>
+
+    <!-- Memory Detail & Version History Modal -->
+    <div id="memory-detail-modal" class="modal-overlay hidden">
+        <div class="connect-modal modal-wide">
+            <div class="modal-header space-between" style="display:flex;align-items:center;">
+                <div>
+                    <h2>Memory Details & History</h2>
+                    <p id="md-meta-subtitle">Inspect provenance, validity, and version history</p>
+                </div>
+                <button id="btn-close-detail-modal" class="btn-icon">×</button>
+            </div>
+            <div class="modal-body" id="memory-detail-body"></div>
+        </div>
     </div>
 
     <script src="js/app.js"></script>
