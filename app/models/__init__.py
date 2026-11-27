@@ -6,6 +6,7 @@ from app.models.database_schema import DatabaseSchema
 from app.models.conversation import Conversation, Message
 from app.models.memory import Memory, MemoryVersion, MemoryAuditLog
 from app.models.query_memory import QueryMemory
+from app.models.access import AccessGrant, ChangeRequest
 
 __all__ = [
     "Base",
@@ -19,4 +20,6 @@ __all__ = [
     "MemoryVersion",
     "MemoryAuditLog",
     "QueryMemory",
+    "AccessGrant",
+    "ChangeRequest",
 ]
