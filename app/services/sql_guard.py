@@ -1,10 +1,3 @@
-"""
-SQL Validation & Read-Only Safety Guard using sqlglot.
-
-Ensures generated SQL (even if influenced by retrieved context/memories)
-remains strictly read-only and respects the live database schema.
-"""
-
 from __future__ import annotations
 
 import json
@@ -17,7 +10,7 @@ from sqlglot import exp
 
 logger = logging.getLogger(__name__)
 
-_FORBIDDEN_EXPRESSIONS = tuple(
+_WRITE_NODES = tuple(
     cls
     for cls in (
         getattr(exp, "Insert", None),
@@ -33,13 +26,13 @@ _FORBIDDEN_EXPRESSIONS = tuple(
     if cls is not None
 )
 
-_FORBIDDEN_KEYWORDS = re.compile(
+_WRITE_KEYWORDS = re.compile(
     r"\b(DROP|DELETE|UPDATE|INSERT|ALTER|TRUNCATE|GRANT|REVOKE|ATTACH|PRAGMA|EXEC|EXECUTE)\b",
     re.IGNORECASE,
 )
 
 
-def _map_dialect(db_type: str) -> str:
+def _dialect(db_type: str) -> str:
     mapping = {
         "postgresql": "postgres",
         "postgres": "postgres",
@@ -49,29 +42,24 @@ def _map_dialect(db_type: str) -> str:
     return mapping.get((db_type or "").lower(), "postgres")
 
 
-def validate_sql_safety(
+def check_sql(
     sql: str,
     db_type: str = "postgresql",
     schema_json_str: Optional[str] = None,
     enforce_read_only: bool = True,
 ) -> Tuple[bool, Optional[str], List[str]]:
-    """Validate SQL syntax, read-only constraint, and live schema table references.
-
-    Returns (is_valid, error_message, referenced_tables).
-    """
     if not sql or not sql.strip():
         return False, "Generated SQL query is empty.", []
 
     cleaned = sql.strip().rstrip(";")
-    if enforce_read_only and _FORBIDDEN_KEYWORDS.search(cleaned):
+    if enforce_read_only and _WRITE_KEYWORDS.search(cleaned):
         return False, "Security policy violation: only read-only SELECT queries are permitted.", []
 
-    dialect = _map_dialect(db_type)
+    dialect = _dialect(db_type)
     try:
         parsed_statements = sqlglot.parse(cleaned, read=dialect)
     except Exception as exc:
         logger.warning("sqlglot parse warning for dialect %s: %s", dialect, exc)
-        # Fallback keyword check when dialect syntax isn't parsed strictly
         if enforce_read_only and not re.match(r"^\s*(SELECT|WITH)\b", cleaned, re.IGNORECASE):
             return False, "Security policy violation: query must start with SELECT or WITH.", []
         return True, None, []
@@ -84,13 +72,12 @@ def validate_sql_safety(
         return False, "Could not parse SQL statement.", []
 
     if enforce_read_only:
-        for forbidden in _FORBIDDEN_EXPRESSIONS:
+        for forbidden in _WRITE_NODES:
             if stmt.find(forbidden) is not None:
                 return False, f"Security policy violation: {forbidden.__name__} statements are forbidden.", []
         if not isinstance(stmt, (exp.Select, exp.Union, exp.Subquery)):
             return False, "Security policy violation: only SELECT queries are allowed.", []
 
-    # Extract referenced tables (excluding CTE names)
     cte_names = {cte.alias_or_name.lower() for cte in stmt.find_all(exp.CTE) if cte.alias_or_name}
     referenced_tables = [
         t.name.lower()
@@ -98,7 +85,6 @@ def validate_sql_safety(
         if t.name and t.name.lower() not in cte_names
     ]
 
-    # Verify referenced tables exist in live schema if provided
     if schema_json_str and referenced_tables:
         try:
             schema_dict: Dict[str, Any] = json.loads(schema_json_str)
@@ -116,8 +102,7 @@ def validate_sql_safety(
     return True, None, referenced_tables
 
 
-def sanitize_sql_template(sql: str) -> str:
-    """Replace literal numbers/strings with placeholders so episodic templates avoid sensitive values."""
+def mask_literals(sql: str) -> str:
     if not sql:
         return ""
     template = re.sub(r"'[^']*'", "'?'", sql)
