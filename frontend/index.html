@@ -171,9 +171,22 @@
                     <span class="brand-text">Context Memory</span>
                 </div>
 
+                <div class="identity-section">
+                    <label class="section-title" for="acting-user">ACTING AS</label>
+                    <select id="acting-user" class="identity-select"></select>
+                    <div class="identity-role" id="acting-role"></div>
+                </div>
+
                 <nav class="sidebar-nav">
                     <button class="nav-tab active" data-tab="chat">
                         <span>SQL Assistant</span>
+                    </button>
+                    <button class="nav-tab" data-tab="approvals">
+                        <span>Approvals</span>
+                        <span id="nav-approvals-badge" class="nav-badge hidden">0</span>
+                    </button>
+                    <button class="nav-tab admin-only hidden" data-tab="team">
+                        <span>Team &amp; Access</span>
                     </button>
                     <button class="nav-tab" data-tab="memories">
                         <span>Memory Dashboard</span>
@@ -259,7 +272,7 @@
 
                     <div class="query-composer-wrapper">
                         <div class="query-composer">
-                            <textarea id="query-input" placeholder="Ask about your data or teach a business definition..." rows="1"></textarea>
+                            <textarea id="query-input" placeholder="Ask about your data, or ask to change a record..." rows="1"></textarea>
                             <div class="composer-actions">
                                 <div class="shortcut-hint">Enter ↵</div>
                                 <button id="btn-send-query" class="btn-primary icon-btn" title="Send">
@@ -267,6 +280,65 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div id="tab-approvals" class="workspace-tab hidden">
+                    <header class="workspace-header space-between" style="display:flex;align-items:center;">
+                        <div class="header-titles">
+                            <h2>Approvals</h2>
+                            <p id="approvals-subtitle">Data changes asked for in chat. Nothing changes until an admin approves.</p>
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <select id="change-filter" aria-label="Filter by status">
+                                <option value="pending">Waiting</option>
+                                <option value="">All</option>
+                                <option value="executed">Applied</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="failed">Failed</option>
+                            </select>
+                            <button id="btn-refresh-changes" class="btn-secondary small-btn">Refresh</button>
+                        </div>
+                    </header>
+                    <div class="dashboard-body">
+                        <div id="change-list" class="memory-list">
+                            <div class="schema-placeholder">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-team" class="workspace-tab hidden">
+                    <header class="workspace-header">
+                        <div class="header-titles">
+                            <h2>Team &amp; Access</h2>
+                            <p>Everyone can read. Choose who may ask for changes, and to which tables. Every change still needs admin approval.</p>
+                        </div>
+                    </header>
+                    <div class="dashboard-body">
+                        <form id="member-form" class="knowledge-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="member-name">Name</label>
+                                    <input type="text" id="member-name" required maxlength="120">
+                                </div>
+                                <div class="form-group">
+                                    <label for="member-email">Email</label>
+                                    <input type="email" id="member-email" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="member-role">Role</label>
+                                    <select id="member-role">
+                                        <option value="viewer">Employee</option>
+                                        <option value="analyst">Analyst</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-actions">
+                                <button type="submit" class="btn-primary">Add member</button>
+                            </div>
+                        </form>
+                        <div id="member-list" class="memory-list team-list"></div>
                     </div>
                 </div>
 
