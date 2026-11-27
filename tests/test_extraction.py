@@ -1,15 +1,15 @@
 from unittest.mock import patch
-from app.services.memory_extraction import (
-    MemoryExtractionService,
-    is_permanent_correction,
-    is_temporary_override,
+from app.services.extraction import (
+    MemoryExtractor,
+    is_rule_change,
+    is_override,
 )
 
 
-def test_temporary_override_not_extracted_as_permanent_rule():
-    svc = MemoryExtractionService()
-    with patch("app.services.memory_extraction.llm_service.generate_with_context") as mock_llm:
-        extracted = svc.extract_memories(
+def test_override_not_extracted():
+    extractor = MemoryExtractor()
+    with patch("app.services.extraction.llm.generate") as mock_llm:
+        extracted = extractor.extract(
             conversation_messages=[
                 {"role": "user", "content": "For this particular report, include cancelled orders too."}
             ],
@@ -20,8 +20,8 @@ def test_temporary_override_not_extracted_as_permanent_rule():
         mock_llm.assert_not_called()
 
 
-def test_extract_valid_business_definition_with_pydantic():
-    svc = MemoryExtractionService()
+def test_extracts_business_definition():
+    extractor = MemoryExtractor()
     mock_json = """```json
     {
       "memories": [
@@ -37,8 +37,8 @@ def test_extract_valid_business_definition_with_pydantic():
       ]
     }
     ```"""
-    with patch("app.services.memory_extraction.llm_service.generate_with_context", return_value=mock_json):
-        extracted = svc.extract_memories(
+    with patch("app.services.extraction.llm.generate", return_value=mock_json):
+        extracted = extractor.extract(
             conversation_messages=[
                 {"role": "user", "content": "For all revenue reports, exclude cancelled orders."}
             ],
@@ -52,7 +52,6 @@ def test_extract_valid_business_definition_with_pydantic():
     assert extracted[0]["confidence"] == 0.96
 
 
-def test_permanent_correction_flag_detected():
-    assert is_permanent_correction("Our revenue definition has changed. Now exclude both cancelled and refunded orders.")
-    assert is_temporary_override("Just this once, include cancelled orders.")
-
+def test_rule_change_detected():
+    assert is_rule_change("Our revenue definition has changed. Now exclude both cancelled and refunded orders.")
+    assert is_override("Just this once, include cancelled orders.")

@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
-from app.services.memory_retrieval import MemoryRetrievalService
-from app.services.memory_service import MemoryService
+from app.services.retrieval import MemoryRetriever
+from app.services.memory_store import MemoryStore
 
 
-def test_search_returns_relevant_approved_memories_only(test_db, sample_org, sample_user, sample_connection):
-    svc = MemoryService(test_db)
-    svc.create_memory(
+def test_search_returns_approved_only(db_session, sample_org, sample_user, sample_connection):
+    store = MemoryStore(db_session)
+    store.create(
         data={
             "memory_type": "semantic",
             "subject": "revenue",
@@ -18,7 +18,7 @@ def test_search_returns_relevant_approved_memories_only(test_db, sample_org, sam
         org_id=sample_org.id,
         auto_approve=True,
     )
-    svc.create_memory(
+    store.create(
         data={
             "memory_type": "semantic",
             "subject": "revenue_pending",
@@ -31,8 +31,8 @@ def test_search_returns_relevant_approved_memories_only(test_db, sample_org, sam
         auto_approve=False,
     )
 
-    retrieval = MemoryRetrievalService(test_db)
-    results = retrieval.search_memories(
+    retriever = MemoryRetriever(db_session)
+    results = retriever.search(
         query="Show monthly revenue",
         organization_id=sample_org.id,
         user_id=sample_user.id,
@@ -43,24 +43,24 @@ def test_search_returns_relevant_approved_memories_only(test_db, sample_org, sam
     assert results[0]["combined_score"] > 0
 
 
-def test_search_excludes_deleted_rejected_and_expired(test_db, sample_org, sample_user):
-    svc = MemoryService(test_db)
-    m_del = svc.create_memory(
+def test_search_excludes_inactive(db_session, sample_org, sample_user):
+    store = MemoryStore(db_session)
+    m_del = store.create(
         data={"memory_type": "semantic", "content": "Deleted revenue metric rule."},
         user_id=sample_user.id,
         org_id=sample_org.id,
         auto_approve=True,
     )
-    svc.delete_memory(m_del.id, sample_user.id, sample_org.id)
+    store.delete(m_del.id, sample_user.id, sample_org.id)
 
-    m_rej = svc.create_memory(
+    m_rej = store.create(
         data={"memory_type": "semantic", "content": "Rejected revenue metric rule."},
         user_id=sample_user.id,
         org_id=sample_org.id,
     )
-    svc.reject_memory(m_rej.id, sample_user.id, sample_org.id)
+    store.reject(m_rej.id, sample_user.id, sample_org.id)
 
-    svc.create_memory(
+    store.create(
         data={
             "memory_type": "semantic",
             "content": "Expired revenue metric rule from 2020.",
@@ -71,8 +71,8 @@ def test_search_excludes_deleted_rejected_and_expired(test_db, sample_org, sampl
         auto_approve=True,
     )
 
-    retrieval = MemoryRetrievalService(test_db)
-    results = retrieval.search_memories(
+    retriever = MemoryRetriever(db_session)
+    results = retriever.search(
         query="revenue metric rule",
         organization_id=sample_org.id,
         user_id=sample_user.id,
@@ -80,9 +80,9 @@ def test_search_excludes_deleted_rejected_and_expired(test_db, sample_org, sampl
     assert results == []
 
 
-def test_temporal_superseded_recall(test_db, sample_org, sample_user, sample_connection):
-    svc = MemoryService(test_db)
-    old_mem = svc.create_memory(
+def test_superseded_recall(db_session, sample_org, sample_user, sample_connection):
+    store = MemoryStore(db_session)
+    previous = store.create(
         data={
             "memory_type": "semantic",
             "subject": "paylens",
@@ -94,15 +94,15 @@ def test_temporal_superseded_recall(test_db, sample_org, sample_user, sample_con
         org_id=sample_org.id,
         auto_approve=True,
     )
-    svc.supersede_memory(
-        old_memory_id=old_mem.id,
+    store.supersede(
+        old_memory_id=previous.id,
         new_memory_data={"content": "PayLens revenue reports use MongoDB."},
         user_id=sample_user.id,
         org_id=sample_org.id,
     )
 
-    retrieval = MemoryRetrievalService(test_db)
-    current = retrieval.search_memories(
+    retriever = MemoryRetriever(db_session)
+    current = retriever.search(
         query="Which database do PayLens revenue reports use?",
         organization_id=sample_org.id,
         user_id=sample_user.id,
@@ -111,7 +111,7 @@ def test_temporal_superseded_recall(test_db, sample_org, sample_user, sample_con
     assert len(current) == 1
     assert "MongoDB" in current[0]["content"]
 
-    historical = retrieval.search_memories(
+    historical = retriever.search(
         query="What did PayLens revenue reports previously use?",
         organization_id=sample_org.id,
         user_id=sample_user.id,
@@ -121,23 +121,22 @@ def test_temporal_superseded_recall(test_db, sample_org, sample_user, sample_con
     assert any("PostgreSQL" in r["content"] for r in historical)
 
 
-def test_duplicate_and_contradiction_detection(test_db, sample_org, sample_user):
-    svc = MemoryService(test_db)
-    svc.create_memory(
+def test_duplicates_and_conflicts(db_session, sample_org, sample_user):
+    store = MemoryStore(db_session)
+    store.create(
         data={"memory_type": "semantic", "subject": "revenue", "content": "Revenue excludes cancelled orders."},
         user_id=sample_user.id,
         org_id=sample_org.id,
         auto_approve=True,
     )
-    retrieval = MemoryRetrievalService(test_db)
-    dups = retrieval.detect_duplicates("Revenue excludes cancelled orders.", sample_org.id, sample_user.id)
-    assert len(dups) == 1
+    retriever = MemoryRetriever(db_session)
+    duplicates = retriever.find_duplicates("Revenue excludes cancelled orders.", sample_org.id, sample_user.id)
+    assert len(duplicates) == 1
 
-    contras = retrieval.detect_contradictions(
+    conflicts = retriever.find_conflicts(
         "Revenue includes all orders even if refunded.",
         "revenue",
         sample_org.id,
         sample_user.id,
     )
-    assert len(contras) == 1
-
+    assert len(conflicts) == 1
