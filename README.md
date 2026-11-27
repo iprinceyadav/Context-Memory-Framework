@@ -21,16 +21,17 @@ An upgraded enterprise Natural Language to SQL (NL2SQL) platform featuring a mod
    - `sqlglot`-powered SQL planning: every statement is classified as a read or a single-table change and checked against the live schema.
 5. **Guardrails for Viewing and Changing Data**
    - **Reads**: one statement, read-only transaction that is always rolled back, capped at `MAX_QUERY_ROWS`, and sensitive columns (`SENSITIVE_COLUMNS`) masked for non-admins.
-   - **Changes**: an employee can ask for an update, insert or delete only if an admin has allowed that action on that table (Team & Access). The chat shows a preview of the rows that will change and files a change request; nothing runs until an admin approves it.
+   - **Changes**: on first visit you pick a role. An **Admin** can ask for an update, insert or delete; the chat shows a preview of the rows that will change, and nothing runs until the admin clicks **Apply**. **Finance**, **Sales** and **Operations** can request specific kinds of change, which wait in the admin's **Requests** page. **HR** and **Employee** are read-only.
    - On approval the matching rows are counted again; if the data moved, nothing runs. The statement executes in a transaction that must touch exactly the previewed rows, otherwise it rolls back.
    - Never allowed: schema changes or admin commands, updates/deletes without `WHERE`, multiple statements, joins in changes, or more than `WRITE_MAX_ROWS` rows. `ALLOW_DATA_CHANGES=False` turns changes off.
-   - Without sign-in the acting user is chosen in the sidebar, so these rules are not yet a security boundary.
+   - Without sign-in the user type is chosen on the landing page, so these rules are not yet a security boundary.
 6. **Plain-Language Insights**
    - Answers are written for non-technical employees: a direct answer, up to three insights, column statistics, the business definitions applied, the previous question, and a note when results were cut off or masked.
-7. **UI Extensions**
-   - Context-Aware SQL Assistant with collapsible **Context Used** panel & conversation history.
+7. **Web UI (server-rendered)**
+   - FastAPI page routes ([app/web/](app/web/)) render Jinja2 templates ([app/templates/](app/templates/)); htmx handles partial updates such as asking a question or approving a request. Static CSS/JS are served from [app/static/](app/static/) at `/static`.
+   - SQLite databases can be connected by file path or by uploading a `.db` file (for example one created with Python's `sqlite3`); uploads are stored in `UPLOAD_DIR` (default `./uploads`).
+   - Context-Aware SQL Assistant with collapsible **Context** panel & conversation history.
    - **Memory Dashboard**, **Memory Details & Version History Modal**, **Context Inspector**, and **Business Knowledge Manager**.
-   - **Approvals** (change requests with previews; admins approve or reject) and **Team & Access** (members, roles and per-table permissions).
 
 ## Quick Start
 

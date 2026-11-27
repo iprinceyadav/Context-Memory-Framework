@@ -1,0 +1,43 @@
+<aside class="sidebar-right{% if not panel or panel.collapsed %} collapsed{% endif %}" id="context-panel-wrapper"{% if oob %} hx-swap-oob="true"{% endif %}>
+    <div class="sidebar-right-header">
+        <h3>Context</h3>
+        <button type="button" class="btn-icon" data-close-panel aria-label="Close panel">×</button>
+    </div>
+    <div class="context-content">
+        {% if not panel %}
+        <div class="placeholder">Nothing yet</div>
+        {% else %}
+        <div class="context-block">
+            <div class="block-label">Tables</div>
+            <ul class="retrieved-tables" id="context-tables-list">
+                {% for table in panel.tables %}<li>{{ table }}</li>{% else %}<li class="placeholder">None</li>{% endfor %}
+            </ul>
+        </div>
+
+        {% if panel.memories is not none %}
+        <div class="context-block">
+            <div class="block-label">Memories</div>
+            <ul class="retrieved-memories-mini" id="context-memories-list">
+                {% for memory in panel.memories %}
+                <li class="mini-mem-item"><span class="badge badge-{{ memory.type }}">{{ memory.type }}</span> {{ memory.content }}</li>
+                {% else %}
+                <li class="placeholder">None</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="context-block">
+            <div class="block-label space-between">
+                <span>SQL{% if ws.connection %} · {{ DB_LABELS.get(ws.connection.db_type, ws.connection.db_type) }}{% endif %}</span>
+                {% if panel.sql %}<button type="button" class="btn-text small" data-copy-target="#context-sql-code">Copy</button>{% endif %}
+            </div>
+            {% if panel.sql %}
+            <div class="sql-viewer"><pre><code id="context-sql-code">{{ panel.sql | highlight_sql }}</code></pre></div>
+            {% else %}
+            <div class="placeholder">None</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</aside>

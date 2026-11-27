@@ -1,0 +1,171 @@
+% APPENDIX
+\appendix
+
+\chapter{Configuration and API Reference}
+\label{app:config}
+
+\section{Configuration Settings}
+Table~\ref{tab:full_config} lists every setting defined in \texttt{app/core/config.py}
+with its default value. Settings marked $^\dagger$ are defined but not read by the current
+code.
+
+\begingroup
+\small
+\begin{longtable}{p{7.2cm} p{7.6cm}}
+    \caption{Complete Configuration Settings and Defaults}
+    \label{tab:full_config} \\
+    \toprule
+    \textbf{Setting} & \textbf{Default} \\
+    \midrule
+    \endfirsthead
+    \toprule
+    \textbf{Setting} & \textbf{Default} \\
+    \midrule
+    \endhead
+    \texttt{DATABASE\_URL}                  & \texttt{sqlite:///./cmf\_platform.db} \\
+    \texttt{LLM\_PROVIDER}$^\dagger$        & \texttt{gemini} \\
+    \texttt{LLM\_API\_KEY}                  & (empty) \\
+    \texttt{MODEL\_NAME}                    & \texttt{gemini-2.5-flash} \\
+    \texttt{SUMMARY\_MODEL\_NAME}           & \texttt{gemini-3.5-flash-lite} \\
+    \texttt{EXTRACTION\_MODEL\_NAME}        & \texttt{gemini-3.5-flash-lite} \\
+    \texttt{ENVIRONMENT}                    & \texttt{development} \\
+    \texttt{MAX\_QUERY\_ROWS}               & 100 \\
+    \texttt{MAX\_RETRIES}$^\dagger$         & 3 \\
+    \texttt{ENABLE\_LOCAL\_LLM}$^\dagger$   & False \\
+    \texttt{EMBEDDING\_MODEL}               & \texttt{all-MiniLM-L6-v2} \\
+    \texttt{MEMORY\_MAX\_RESULTS}           & 10 \\
+    \texttt{MEMORY\_TOKEN\_BUDGET}          & 4000 \\
+    \texttt{MEMORY\_AUTO\_EXTRACT}          & True \\
+    \texttt{MEMORY\_DEFAULT\_STATUS}$^\dagger$ & \texttt{pending} \\
+    \texttt{CONVERSATION\_HISTORY\_TURNS}   & 6 \\
+    \texttt{RETRIEVAL\_WEIGHT\_VECTOR}      & 0.45 \\
+    \texttt{RETRIEVAL\_WEIGHT\_KEYWORD}     & 0.20 \\
+    \texttt{RETRIEVAL\_WEIGHT\_RECENCY}     & 0.15 \\
+    \texttt{RETRIEVAL\_WEIGHT\_IMPORTANCE}  & 0.10 \\
+    \texttt{RETRIEVAL\_WEIGHT\_TYPE}        & 0.10 \\
+    \texttt{ENFORCE\_READ\_ONLY\_SQL}$^\dagger$ & True \\
+    \texttt{ALLOW\_DATA\_CHANGES}           & True \\
+    \texttt{WRITE\_MAX\_ROWS}               & 50 \\
+    \texttt{SENSITIVE\_COLUMNS}             & password, passwd, secret, token, api\_key, apikey, ssn, card\_number, cvv, pin\_code \\
+    \texttt{VECTOR\_STORE\_URL}             & (empty: embedded store) \\
+    \texttt{VECTOR\_STORE\_API\_KEY}        & (empty) \\
+    \texttt{VECTOR\_STORE\_PATH}            & \texttt{./vector\_store} \\
+    \texttt{UPLOAD\_DIR}                    & \texttt{./uploads} \\
+    \texttt{RERANK\_ENABLED}                & True \\
+    \texttt{RERANKER\_MODEL}                & \texttt{cross-encoder/ms-marco-MiniLM-L-6-v2} \\
+    \texttt{RERANK\_WEIGHT}                 & 0.6 \\
+    \texttt{RERANK\_MIN\_SCORE}             & 0.0 (threshold disabled) \\
+    \texttt{RAG\_CANDIDATES}                & 30 \\
+    \texttt{RAG\_SCHEMA\_FULL\_TABLES}      & 12 \\
+    \texttt{RAG\_SCHEMA\_TOP\_TABLES}       & 8 \\
+    \texttt{RAG\_EXAMPLES}                  & 3 \\
+    \texttt{RAG\_REWRITE\_QUERY}            & True \\
+    \bottomrule
+\end{longtable}
+\endgroup
+
+\section{API Endpoints}
+\label{app:api}
+All JSON endpoints are served under \texttt{/api}. Most take \texttt{organization\_id} and
+\texttt{user\_id} query parameters (defaults \texttt{default-org} and \texttt{default-user});
+``admin'' means role \texttt{owner} or \texttt{admin}.
+
+\begingroup
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{longtable}{p{1.2cm} p{7.4cm} p{6.4cm}}
+    \caption{JSON API Endpoints}
+    \label{tab:api} \\
+    \toprule
+    \textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+    \midrule
+    \endfirsthead
+    \toprule
+    \textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+    \midrule
+    \endhead
+    POST   & \texttt{/chat/ask} & Answer a question or prepare a change request \\
+    GET    & \texttt{/chat/conversations} & List conversations \\
+    POST   & \texttt{/chat/conversations} & Create a conversation \\
+    GET    & \texttt{/chat/conversations/\{id\}/messages} & Message history \\
+    GET    & \texttt{/memories} & List memories (type, status, connection filters) \\
+    POST   & \texttt{/memories} & Create a memory (optional auto-approve) \\
+    GET    & \texttt{/memories/\{id\}} & Memory details \\
+    PATCH  & \texttt{/memories/\{id\}} & Update; keeps version history \\
+    DELETE & \texttt{/memories/\{id\}} & Delete and clear embedding \\
+    POST   & \texttt{/memories/\{id\}/approve} & Approve a pending memory \\
+    POST   & \texttt{/memories/\{id\}/reject} & Reject a pending memory \\
+    POST   & \texttt{/memories/\{id\}/supersede} & Replace with a new definition \\
+    POST   & \texttt{/memories/search} & Hybrid ranked search \\
+    GET    & \texttt{/memories/\{id\}/versions} & Version history \\
+    GET    & \texttt{/memories/\{id\}/audit} & Audit trail \\
+    GET    & \texttt{/memories/statistics} & Counts by status and type \\
+    GET    & \texttt{/memory/debug/\{conversation\_id\}} & Retrieval trace of the latest turn \\
+    GET    & \texttt{/evaluation/results} & Stored benchmark results \\
+    POST   & \texttt{/evaluation/run} & Run the benchmark \\
+    GET    & \texttt{/team/members} & List organization members \\
+    POST   & \texttt{/team/members} & Add a member (admin) \\
+    PATCH  & \texttt{/team/members/\{id\}} & Change a member's role (admin) \\
+    GET    & \texttt{/team/grants} & Active grants \\
+    POST   & \texttt{/team/grants} & Grant a change action on a table (admin) \\
+    DELETE & \texttt{/team/grants/\{id\}} & Revoke a grant (admin) \\
+    GET    & \texttt{/changes} & Change requests (status filter) \\
+    GET    & \texttt{/changes/\{id\}} & One change request \\
+    POST   & \texttt{/changes/\{id\}/approve} & Re-check and apply (admin) \\
+    POST   & \texttt{/changes/\{id\}/reject} & Reject with optional note (admin) \\
+    POST   & \texttt{/databases/test} & Test a connection \\
+    POST   & \texttt{/databases/connect} & Save a connection (reuses an existing one) \\
+    GET    & \texttt{/databases/} & List saved connections \\
+    POST   & \texttt{/databases/sync-schema} & Re-introspect a schema \\
+    POST   & \texttt{/databases/ask}, \texttt{/query-direct} & Legacy read-only endpoints \\
+    GET    & \texttt{/health} & Health check \\
+    \bottomrule
+\end{longtable}
+\endgroup
+
+\chapter{Sample Databases and Setup}
+\label{app:sampledbs}
+
+\section{Sample Databases}
+Five synthetic SQLite databases are provided in \texttt{sample\_dbs/} for demonstration. All
+data is made up. Table~\ref{tab:sampledbs} gives their contents as counted from the files,
+and Figure~\ref{fig:chart_sampledbs} compares their sizes.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Sample Databases (Counted from the Files)}
+    \begin{tabular}{p{4.3cm} p{1.1cm} p{1.4cm} p{0.8cm} p{6.6cm}}
+        \toprule
+        \textbf{File} & \textbf{Tables} & \textbf{Rows} & \textbf{FKs} & \textbf{Largest tables} \\
+        \midrule
+        \texttt{retail\_store}       & 8  & 63,541 & 7 & order\_items 31,523; orders 15,000; payments 13,204 \\[3pt]
+        \texttt{logistics\_company}  & 8  & 48,701 & 8 & shipment\_events 35,005; shipments 12,000 \\[3pt]
+        \texttt{saas\_company}       & 7  & 43,135 & 6 & feature\_usage 21,172; invoices 12,452; users 5,547 \\[3pt]
+        \texttt{finance\_accounting} & 10 & 27,841 & 8 & expenses 8,000; purchase\_bills 6,000; sales\_invoices 5,000 \\[3pt]
+        \texttt{hr\_company}         & 6  & 17,919 & 7 & salary\_history 9,112; leave\_requests 4,878 \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:sampledbs}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.75\textwidth}{chart_sample_dbs.png}{Total rows and tables of each sample database.}{fig:chart_sampledbs}
+\end{figure}
+
+\section{Running the System}
+\label{app:run}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=bash, caption={Installation, start-up, tests and benchmark}, label={lst:run}]
+copy .env.example .env          # then set LLM_API_KEY
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+pytest -v tests/
+python tests/run_evaluation.py  # writes tests/evaluation_results.json
+\end{lstlisting}
+\end{minipage}
+After start-up, the web interface is available at \texttt{http://127.0.0.1:8000} and the
+interactive API documentation at \texttt{/docs}. A sample database can be connected on the
+Connect Database screen by uploading the file or by typing its path, for example
+\texttt{sample\_dbs/retail\_store.db}.

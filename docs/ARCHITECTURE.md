@@ -10,8 +10,10 @@ User Question
    │
    ├─► Load Conversation & Working Memory (Conversation, Message, QueryMemory)
    ├─► Load Live Schema (DatabaseConnector / DatabaseSchema)
-   ├─► Hybrid Memory Retrieval (MemoryRetriever + Embedder)
+   ├─► Follow-up rewrite (previous question + current, retrieval only; RAG_REWRITE_QUERY)
+   ├─► Hybrid Memory Retrieval (Qdrant dense+sparse RRF ──► weighted score ──► cross-encoder rerank)
    │       └─ Filters FIRST: organization_id, user_id/visibility, connection_id, status=approved, valid_from/valid_to
+   ├─► Schema table selection (vector search over schema_tables for large schemas) + similar past questions (query_examples)
    ├─► Context Engineering (ContextBuilder)
    │       └─ Priority Hierarchy + Token Budget + Untrusted Context Framing + Source IDs
    │
@@ -22,7 +24,7 @@ User Question
 [DatabaseConnector.execute] ──► External User DB (PostgreSQL / MySQL / SQLite)
    │
    ▼
-[LLMClient.summarize] ──► Save Message & QueryMemory
+[LLMClient.summarize] ──► Save Message & QueryMemory ──► index as example (query_examples)
    │
    └─► Background Task: MemoryExtractor ──► MemoryStore (pending queue + dedup + contradiction check)
 ```

@@ -1,0 +1,493 @@
+% CHAPTER 3 - SYSTEM ANALYSIS AND DESIGN
+\chapter{System Analysis and Design}
+
+\section{System Architecture Overview}
+The Context Memory Framework is a single FastAPI application that serves two interfaces
+over the same logic: a JSON API under \texttt{/api} and a server-rendered web interface at
+\texttt{/}. Behind them, a set of services implements the pipeline. The application keeps
+its own data in a \textit{platform database} (SQLite file \texttt{cmf\_platform.db} by
+default) and connects to one or more \textit{target databases} (PostgreSQL, MySQL or
+SQLite) that hold the company data being queried. A Qdrant vector store, embedded on disk
+unless a server URL is configured, indexes memories, schema tables and past questions.
+Google Gemini is the only external service; it generates SQL, writes the plain-language
+answer and extracts candidate memories.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=0.45cm and 0.5cm, every node/.style={font=\small}]
+        \node[blk=5.6cm, fill=gray!10] (ui) {Web UI (Jinja2 + htmx)\quad|\quad JSON API (\texttt{/api})};
+        \node[blk=6.6cm, below=of ui, fill=yellow!15] (chat) {Chat pipeline \texttt{/api/chat/ask}\\{\footnotesize auth $\rightarrow$ schema $\rightarrow$ context $\rightarrow$ SQL $\rightarrow$ guard}};
+        \node[blk=2.6cm, below left=0.6cm and -1.3cm of chat] (ctx) {Context Builder};
+        \node[blk=2.6cm, below right=0.6cm and -1.3cm of chat] (guard) {SQL Guard\\(\texttt{plan\_sql})};
+        \node[blk=2.6cm, below=of ctx] (ret) {Memory Retriever\\+ Reranker};
+        \node[blk=2.6cm, below=of guard] (chg) {Change Service\\+ Access};
+        \node[blk=2.6cm, left=of ret] (store) {Memory Store\\+ Extractor};
+        \node[blk=2.6cm, right=of chg] (conn) {Database\\Connector};
+        \node[sto, below=of ret] (vec) {Qdrant\\(3 collections)};
+        \node[sto, below=of store] (plat) {Platform DB\\(SQLite)};
+        \node[sto, below=of conn] (tgt) {Target DBs\\PG / MySQL / SQLite};
+        \node[blk=2.2cm, right=1.2cm of chat, fill=red!8] (llm) {Gemini LLM};
+        \draw[arr] (ui) -- (chat);
+        \draw[arr] (chat) -- (ctx);
+        \draw[arr] (chat) -- (guard);
+        \draw[arr] (ctx) -- (ret);
+        \draw[arr] (guard) -- (chg);
+        \draw[arr] (ret) -- (vec);
+        \draw[arr] (store) -- (plat);
+        \draw[arr] (store) -- (vec);
+        \draw[arr] (chg) -- (conn);
+        \draw[arr] (conn) -- (tgt);
+        \draw[arr, <->] (chat) -- (llm);
+        \draw[arr] (ret.west) -- (store.east);
+    \end{tikzpicture}
+    \caption{High-level architecture of the Context Memory Framework.}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Proposed Methodology}
+
+\subsection{Architecture Layers}
+The system is organized into five logical layers:
+\begin{enumerate}[label=\arabic*., leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item \textbf{Presentation layer:} page routes in \texttt{app/web/} render Jinja2
+          templates and htmx fragments; JSON routers in \texttt{app/api/} serve programmatic
+          clients and the test suite. Page routes call the same handler functions as the
+          API, so authorization and guardrails exist in one place only.
+    \item \textbf{Pipeline layer:} the \texttt{ask} handler orchestrates a single question
+          from identification to response.
+    \item \textbf{Context layer:} memory storage and extraction, hybrid retrieval with
+          reranking, schema-table selection, similar-question examples, and the context
+          builder that assembles the prompt.
+    \item \textbf{Safety layer:} the SQL planner, the access-control service (roles,
+          grants, masking) and the change service that previews, stores and executes
+          approved changes.
+    \item \textbf{Data layer:} SQLAlchemy models of the platform database, the database
+          connector for target databases, and the Qdrant vector store.
+\end{enumerate}
+
+\subsection{End-to-End Data Flow}
+A question sent to \texttt{POST /api/chat/ask} passes through the following steps:
+\begin{enumerate}[label=\arabic*., leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item \textbf{Identify:} resolve the organization and user and check that they belong
+          together; resolve the target database from a saved \texttt{connection\_id} or
+          from inline credentials.
+    \item \textbf{Working memory:} load or create the \texttt{Conversation} and store the
+          user's \texttt{Message}.
+    \item \textbf{Schema:} load the cached schema by a SHA-256 fingerprint of
+          type/user/host/port/database, or introspect it (columns, foreign-key references,
+          sampled categorical values) and cache it.
+    \item \textbf{Context build:} retrieve memories, select schema tables, add similar past
+          questions, recent turns and the last \texttt{QueryMemory}, and fit everything into
+          the token budget. If this step fails the pipeline falls back to a schema-only
+          prompt.
+    \item \textbf{Generate SQL:} call the LLM with the built prompt.
+    \item \textbf{Plan and guard:} classify the statement as a read or a single-table
+          change, or refuse it, and validate it against the live schema.
+    \item \textbf{Read:} execute in a transaction that is always rolled back, capped at
+          \texttt{MAX\_QUERY\_ROWS}, mask sensitive columns for non-admins, and ask the LLM
+          for a plain-language answer (falling back to computed statistics).
+          \textbf{Write:} check permission, preview the affected rows, and store a pending
+          \texttt{ChangeRequest} for admin approval.
+    \item \textbf{Persist:} store the assistant message and a \texttt{QueryMemory} with a
+          literal-masked SQL template and structured metadata; index the question as an
+          example.
+    \item \textbf{Extract (background):} ask the LLM for candidate memories from the turn
+          and save them as \textit{pending}, superseding a conflicting memory when the user
+          stated a correction.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=0.32cm, every node/.style={font=\small}]
+        \node[blk=4.2cm] (a) {1--2. Authorize user, load conversation};
+        \node[blk=4.2cm, below=of a] (b) {3. Load / introspect schema};
+        \node[blk=4.2cm, below=of b, fill=yellow!15] (c) {4. Build context (retrieve + budget)};
+        \node[blk=4.2cm, below=of c, fill=red!8] (d) {5. LLM generates SQL};
+        \node[diamond, draw, aspect=2.2, below=of d, fill=gray!10, inner sep=1pt] (e) {6. \texttt{plan\_sql}};
+        \node[blk=3.6cm, below left=0.5cm and 0.2cm of e] (f) {7a. Read: rolled-back\\transaction, cap, mask};
+        \node[blk=3.6cm, below right=0.5cm and 0.2cm of e] (g) {7b. Change: permission,\\preview, pending request};
+        \node[blk=3.0cm, right=1.4cm of e] (x) {Refuse with reason\\(\texttt{not\_allowed})};
+        \node[blk=3.6cm, below=of f, fill=red!8] (h) {LLM answer + insights};
+        \node[blk=3.6cm, below=of h] (i) {8. Save message,\\QueryMemory, example};
+        \node[blk=3.6cm, below=of i, fill=green!8] (j) {9. Background memory\\extraction (pending)};
+        \draw[arr] (a) -- (b); \draw[arr] (b) -- (c); \draw[arr] (c) -- (d); \draw[arr] (d) -- (e);
+        \draw[arr] (e) -| node[lbl, above left]{read} (f);
+        \draw[arr] (e) -| node[lbl, below left, pos=0.9]{change} (g);
+        \draw[arr] (e) -- node[lbl, above]{invalid} (x);
+        \draw[arr] (f) -- (h); \draw[arr] (h) -- (i); \draw[arr] (i) -- (j);
+    \end{tikzpicture}
+    \caption{Processing of one question by \texttt{POST /api/chat/ask}.}
+    \label{fig:dataflow}
+\end{figure}
+
+\subsection{Modular Components}
+Table~\ref{tab:modules} lists the main modules of the code base and their
+responsibilities, with line counts measured on the final source tree.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Modular Component Breakdown of the System}
+    \begin{tabular}{p{6.5cm} p{0.9cm} p{7.4cm}}
+        \toprule
+        \textbf{Module} & \textbf{Lines} & \textbf{Responsibility} \\
+        \midrule
+        \texttt{api/chat.py}                  & 468 & End-to-end question pipeline, conversations. \\[3pt]
+        \texttt{services/retrieval.py}        & 475 & Authorized hybrid ranking, duplicates, conflicts. \\[3pt]
+        \texttt{services/context\_builder.py} & 480 & Schema selection, examples, prompt assembly, answer prompt. \\[3pt]
+        \texttt{services/memory\_store.py}    & 417 & Memory lifecycle, versions, audit log, ingestion. \\[3pt]
+        \texttt{services/vector\_store.py}    & 252 & Qdrant collections, upsert, hybrid RRF search. \\[3pt]
+        \texttt{services/changes.py}          & 238 & Change preview, request storage, approval, execution. \\[3pt]
+        \texttt{services/sql\_guard.py}       & 229 & SQL planning and read/write classification. \\[3pt]
+        \texttt{services/connector.py}        & 187 & Target DB engines, introspection, guarded read/write. \\[3pt]
+        \texttt{services/extraction.py}       & 179 & LLM memory extraction, override detection. \\[3pt]
+        \texttt{services/indexer.py}          & 179 & Vector index sync and startup rebuild. \\[3pt]
+        \texttt{services/embedder.py}         & 137 & Sentence-transformer embeddings (lazy). \\[3pt]
+        \texttt{services/reranker.py}         &  78 & Cross-encoder reranking (lazy). \\[3pt]
+        \texttt{services/text.py}             &  78 & Tokenizer, follow-up detection, sparse vectors. \\[3pt]
+        \texttt{services/access.py}           &  76 & Roles, grants, sensitive-column masking. \\[3pt]
+        \texttt{services/llm.py}              &  57 & Gemini client for SQL, answers, extraction. \\[3pt]
+        \texttt{web/pages.py}                 & 621 & HTML page routes and htmx fragments. \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:modules}
+\end{table}
+
+\section{Data Model}
+The platform database is defined with SQLAlchemy 2 declarative models and created at
+start-up by \texttt{create\_all} plus a small list of column additions (the project does not
+use a migration tool). It contains twelve tables, summarised in
+Table~\ref{tab:platform_tables}.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Tables of the Platform Database}
+    \begin{tabular}{p{4.6cm} p{10.6cm}}
+        \toprule
+        \textbf{Table} & \textbf{Purpose and key fields} \\
+        \midrule
+        \texttt{organizations}        & Tenants; every other record is scoped to one. \\[3pt]
+        \texttt{users}                & Members with role \texttt{owner}, \texttt{admin}, \texttt{analyst} or \texttt{viewer}. \\[3pt]
+        \texttt{database\_connections}& Saved target databases (type, host, port, name, user, encoded password). \\[3pt]
+        \texttt{database\_schemas}    & Cached schema JSON keyed by connection fingerprint. \\[3pt]
+        \texttt{conversations}        & Chat sessions with an active-task summary. \\[3pt]
+        \texttt{messages}             & User and assistant turns, generated SQL, result metadata, context trace. \\[3pt]
+        \texttt{memories}             & Long-term memories (type, content, subject, scope, visibility, importance, confidence, status, validity, provenance, embedding). \\[3pt]
+        \texttt{memory\_versions}     & Numbered content history of each memory. \\[3pt]
+        \texttt{memory\_audit\_logs}  & Every action on a memory and who performed it. \\[3pt]
+        \texttt{query\_memories}      & Structured record of each answered question for follow-ups. \\[3pt]
+        \texttt{access\_grants}       & Permission for a member to request a change action on a table. \\[3pt]
+        \texttt{change\_requests}     & Proposed data changes with preview, review and outcome. \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:platform_tables}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[every node/.style={font=\small}]
+        \tikzset{er/.style={blk=2.9cm, minimum height=0.8cm, font=\footnotesize}}
+        \node[er] (org)  at (0,0)       {organizations};
+        \node[er] (usr)  at (3.6,0)     {users};
+        \node[er] (dbc)  at (7.6,0)     {database\_connections};
+        \node[er] (ds)   at (11.6,0)    {database\_schemas};
+        \node[er] (mem)  at (0,-1.8)    {memories};
+        \node[er] (conv) at (3.6,-1.8)  {conversations};
+        \node[er] (cr)   at (7.6,-1.8)  {change\_requests};
+        \node[er] (ag)   at (11.6,-1.8) {access\_grants};
+        \node[er] (ver)  at (0,-3.4)    {memory\_versions};
+        \node[er] (msg)  at (3.6,-3.4)  {messages};
+        \node[er] (qm)   at (7.6,-3.4)  {query\_memories};
+        \node[er] (aud)  at (0,-5.0)    {memory\_audit\_logs};
+        \draw[arr] (usr) -- (org);
+        \draw[arr] (dbc.north) -- ++(0,0.45) -| (org.north);
+        \draw[arr, dashed] (ds) -- node[lbl, below]{hash} (dbc);
+        \draw[arr] (mem) -- (usr);
+        \draw[arr] (conv) -- (usr);
+        \draw[arr] (cr) -- (dbc);
+        \draw[arr] (ag) -- (dbc);
+        \draw[arr] (cr) -- (conv);
+        \draw[arr] (ver) -- (mem);
+        \draw[arr] (aud.west) -- ++(-0.4,0) |- (mem.west);
+        \draw[arr] (msg) -- (conv);
+        \draw[arr] (qm) -- (conv);
+    \end{tikzpicture}
+    \caption{Simplified entity relationships of the platform database. Arrows point to the
+    referenced table; links to \texttt{organizations} and \texttt{users} are drawn only once
+    for clarity, and the schema cache is linked by fingerprint, not a foreign key.}
+    \label{fig:er}
+\end{figure}
+
+\section{Memory Model and Lifecycle}
+
+\subsection{Memory Categories}
+CMF uses the four memory categories introduced in Chapter~2. Three are long-term and stored
+in the \texttt{memories} table; working memory is formed by the conversation and the
+structured query record (Table~\ref{tab:memory_types}).
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Memory Categories in CMF}
+    \begin{tabular}{p{2.0cm} p{6.0cm} p{7.2cm}}
+        \toprule
+        \textbf{Category} & \textbf{Stored as} & \textbf{Example} \\
+        \midrule
+        Semantic   & \texttt{memory\_type="semantic"}   & ``Revenue excludes cancelled orders'' \\[3pt]
+        Procedural & \texttt{memory\_type="procedural"} & ``Display monetary results in INR'' \\[3pt]
+        Episodic   & \texttt{memory\_type="episodic"}   & ``User explored top 10 vendors by outstanding payment'' \\[3pt]
+        Working    & \texttt{Conversation}, \texttt{Message}, \texttt{QueryMemory} & Previous question, SQL template, filters, sort, limit \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:memory_types}
+\end{table}
+
+Every long-term memory has a \textit{scope} (\texttt{personal}, \texttt{connection} or
+\texttt{organization}), a \textit{visibility} (\texttt{personal} or \texttt{shared}), an
+importance from 1 to 10, a confidence between 0 and 1, an optional validity interval
+(\texttt{valid\_from}, \texttt{valid\_to}), the schema fingerprint and the source
+conversation and message. Creating or sharing an organization-wide or shared memory
+requires a contributor role (\texttt{owner}, \texttt{admin} or \texttt{analyst}).
+
+\subsection{Lifecycle and Governance}
+Figure~\ref{fig:lifecycle} shows the lifecycle. Memories extracted by the LLM always start
+as \textit{pending}; only \textit{approved} memories reach the prompt. A memory created
+manually through the Knowledge page can be approved immediately. When the user states a
+correction, the old memory becomes \textit{superseded} (with \texttt{valid\_to} set) and a
+new memory that points to it through \texttt{supersedes\_id} is created. Superseded
+memories are retrieved only when the question asks about history, detected by phrases such
+as ``previously'', ``historically'', ``used to'' or ``old definition''. Deleting a memory
+marks it \textit{deleted} and clears its embedding. Every content edit writes a new
+\texttt{MemoryVersion} and every action writes a \texttt{MemoryAuditLog} entry.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=0.9cm and 1.9cm, every node/.style={font=\small}]
+        \node[st] (p) {pending};
+        \node[st, right=of p, fill=blue!10] (a) {approved};
+        \node[st, below=of p, fill=red!8] (r) {rejected};
+        \node[st, right=of a] (s) {superseded};
+        \node[st, below=of a] (e) {expired};
+        \node[st, below=of s, fill=gray!15] (d) {deleted};
+        \node[left=0.9cm of p, font=\small, align=center] (src) {extracted\\or created};
+        \draw[arr] (src) -- (p);
+        \draw[arr] (p) -- node[lbl, above]{approve} (a);
+        \draw[arr] (p) -- node[lbl, left]{reject} (r);
+        \draw[arr] (a) -- node[lbl, above]{correction} (s);
+        \draw[arr] (a) -- node[lbl, left]{expire} (e);
+        \draw[arr] (a) -- node[lbl, below, sloped]{delete} (d);
+        \draw[arr] (src.north) to[bend left=30] node[lbl, above]{auto-approve (manual)} (a.north);
+    \end{tikzpicture}
+    \caption{Lifecycle states of a long-term memory. Only \textit{approved} memories enter
+    prompts; \textit{superseded} ones only for history questions.}
+    \label{fig:lifecycle}
+\end{figure}
+
+\subsection{One-Time Overrides}
+Requests that apply to a single query must not become rules. Before extraction, the latest
+user message is checked against regular expressions for phrases such as ``for this report'',
+``just this once'', ``only for this'', ``this time only'' and ``temporarily''. If one matches
+and the message does not also signal a rule change (``from now on'', ``permanently'',
+``definition has changed'', ``update the rule'', and similar), extraction is skipped. The
+override still applies to the current query because it is part of the question, which
+ranks third in the prompt's priority order.
+
+\section{Retrieval and Scoring Design}
+
+\subsection{Authorization Before Ranking}
+Authorization filters are applied before any scoring, both in SQL and in the Qdrant payload
+filter: same organization; memory owned by the requester or \texttt{shared}; and either the
+same connection or not connection-scoped. Status and validity checks follow, and each
+excluded memory is recorded with a reason.
+
+\subsection{Candidate Generation}
+Candidates come from a Qdrant hybrid query that fuses a dense search (MiniLM embedding) and
+a sparse search (hashed term vectors with IDF weighting) by reciprocal rank fusion, limited
+to $\max(\texttt{RAG\_CANDIDATES}, k)$ results. If Qdrant is unavailable the retriever scans
+all authorized rows in the platform database.
+
+\subsection{First-Stage Score}
+Each candidate memory $m$ for query $q$ receives a weighted score
+\begin{equation}
+    S(q,m) = w_V V + w_K K + w_R R + w_I I + w_T T
+\end{equation}
+with default weights $w_V=0.45$, $w_K=0.20$, $w_R=0.15$, $w_I=0.10$, $w_T=0.10$
+(Figure~\ref{fig:weights}). The components are:
+\begin{align}
+    V &= \cos(\mathbf{e}_q, \mathbf{e}_m) \;\text{(clipped to }[0,1]\text{)} \\
+    K &= \frac{|\mathcal{T}(q) \cap \mathcal{T}(m)|}{|\mathcal{T}(q)|} \\
+    R &= 0.5^{\,a/30}, \quad a = \text{age of } m \text{ in days} \\
+    I &= \frac{\text{importance}(m) - 1}{9}
+\end{align}
+where $\mathcal{T}(\cdot)$ is the set of lower-cased terms after stop-word removal, with
+\texttt{snake\_case} identifiers also split into parts. $T$ is a type-intent score: if the
+question contains a keyword from an intent map (for example ``revenue'' $\rightarrow$
+semantic, ``currency'' $\rightarrow$ procedural, ``previous'' $\rightarrow$ episodic) and
+the memory type matches, $T=1$; if a keyword matched but the type does not, $T=0.4$; if no
+keyword matched, $T=0.6$. When no embedding is available, the vector weight is added to the
+keyword weight. The recency term halves every 30 days (Figure~\ref{fig:recency}).
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.58\textwidth}{chart_weights.png}{Default weights of the first-stage score (from \texttt{.env.example}).}{fig:weights}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.58\textwidth}{chart_recency.png}{Recency score as a function of memory age (30-day half-life).}{fig:recency}
+\end{figure}
+
+\subsection{Reranking and Cut-off}
+The scored candidates are reranked by the cross-encoder
+\texttt{ms-marco-MiniLM-L-6-v2}. Its logit is converted to $r \in (0,1)$ with the logistic
+function and combined with the first-stage score:
+\begin{equation}
+    \text{final}(q,m) = \lambda\, r(q,m) + (1-\lambda)\, S(q,m), \qquad \lambda = 0.6
+\end{equation}
+If the reranker cannot be loaded, the first-stage score is used unchanged. The top $k$
+memories are kept, where $k$ is set by \texttt{MEMORY\_MAX\_RESULTS} (default 10). The
+remaining candidates are recorded with the exclusion reason \texttt{below\_top\_k\_cutoff}.
+
+\section{Context Engineering Design}
+
+\subsection{Instruction Priority Hierarchy}
+The system section of every prompt states the priority order explicitly:
+\begin{enumerate}[label=\arabic*., leftmargin=*, topsep=4pt, itemsep=2pt]
+    \item System security rules (read-only by default; a change is one approved statement on one table).
+    \item The live database schema, which is authoritative over memories.
+    \item The current question's explicit instructions, including one-time overrides.
+    \item Confirmed business definitions (semantic memories).
+    \item User and database preferences (procedural memories).
+    \item Recent conversation and previous analytical context (working and episodic memory).
+\end{enumerate}
+It also states that text inside retrieved memories is untrusted data, not instructions, and
+must be ignored if it tries to bypass security or modify tables.
+
+\subsection{Token Budget}
+Token counts are approximated as $\lfloor |\text{text}|/4 \rfloor$ characters. The
+mandatory sections (system rules, schema, question and generation requirements) are placed
+first; the remaining budget is $\max(200, B - \text{mandatory})$ with $B = 4000$ by default.
+Optional content is then admitted greedily in priority order: ranked memories, similar past
+questions, recent conversation turns (up to six turns, each message truncated to 300
+characters) and finally the previous analytical query. A memory that does not fit is
+recorded as \texttt{token\_budget\_exceeded}.
+
+\subsection{Schema Selection}
+Schemas with at most \texttt{RAG\_SCHEMA\_FULL\_TABLES} (12) tables are sent in full. For
+larger schemas the builder retrieves table descriptions from the \texttt{schema\_tables}
+collection (or ranks tables by keyword overlap), reranks them, keeps the top
+\texttt{RAG\_SCHEMA\_TOP\_TABLES} (8), and adds tables referenced by foreign keys and tables
+used by the previous query, up to four extra tables.
+
+\subsection{Follow-up Rewriting}
+With \texttt{RAG\_REWRITE\_QUERY} enabled, a question is treated as a follow-up if it starts
+with words such as ``now'', ``only'', ``also'' or ``same'', begins with ``what about'' or
+``how about'', refers to ``those'', ``these'', ``same'' or ``previous'', or has at most two
+content words. Retrieval then uses the previous question prepended to the current one; the
+prompt still contains the user's exact words.
+
+\section{Safety and Access-Control Design}
+
+\subsection{Statement Planning}
+Every generated statement is parsed with \texttt{sqlglot} in the target dialect and
+classified by \texttt{plan\_sql}:
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=3pt]
+    \item Exactly one statement is allowed.
+    \item A \textbf{read} must be a \texttt{SELECT}, \texttt{UNION} or subquery and must not
+          contain any write node or a write keyword (\texttt{DROP}, \texttt{DELETE},
+          \texttt{UPDATE}, \texttt{INSERT}, \texttt{ALTER}, \texttt{TRUNCATE},
+          \texttt{GRANT}, \texttt{REVOKE}, \texttt{ATTACH}, \texttt{PRAGMA}, \texttt{EXEC}).
+    \item A \textbf{change} must be one \texttt{UPDATE}, \texttt{INSERT} or \texttt{DELETE}
+          on one table, with no nested write, no joins, \texttt{FROM} or \texttt{USING};
+          \texttt{UPDATE} and \texttt{DELETE} need a \texttt{WHERE} clause; assigned
+          columns must exist.
+    \item Every referenced table must exist in the live schema. Anything else, including
+          DDL and administrative commands, is refused with a plain-language reason.
+\end{itemize}
+
+\subsection{Roles, Grants and Masking}
+Roles \texttt{owner} and \texttt{admin} are administrators, \texttt{analyst} is a
+contributor and \texttt{viewer} is read-only. A non-admin may request a change only with an
+active \texttt{AccessGrant} for that action on that table (or \texttt{*}) and connection.
+Columns whose names contain any configured sensitive pattern (password, secret, token,
+api\_key, ssn, card\_number, cvv, pin\_code and others) are masked for non-admins in answers
+and previews.
+
+\subsection{Change Approval}
+Figure~\ref{fig:change_flow} shows the change workflow. The approval step re-plans the
+stored statement and recounts the matching rows; if the count differs from the preview,
+nothing runs. Otherwise the statement executes in a transaction that must affect exactly the
+previewed number of rows, or it is rolled back.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[every node/.style={font=\small}]
+        \node[blk=3.0cm] (a) at (0,0)    {Change SQL\\from LLM};
+        \node[blk=3.0cm] (b) at (4.6,0)  {Permission:\\admin or grant};
+        \node[blk=3.0cm] (c) at (9.2,0)  {Preview: count\\+ first 5 rows};
+        \node[blk=3.0cm, fill=yellow!15] (d) at (9.2,-2)  {ChangeRequest\\\textit{pending}};
+        \node[blk=3.0cm] (e) at (4.6,-2) {Admin approves:\\re-plan + recount};
+        \node[blk=3.0cm, fill=green!8] (f) at (0,-2) {Execute; must touch\\exactly $N$ rows};
+        \node[blk=3.6cm, fill=red!8] (g) at (4.6,-4) {failed or rejected:\\nothing changed};
+        \draw[arr] (a) -- (b); \draw[arr] (b) -- (c); \draw[arr] (c) -- (d);
+        \draw[arr] (d) -- node[lbl, above]{approve} (e);
+        \draw[arr] (e) -- node[lbl, above]{match} (f);
+        \draw[arr] (e) -- node[lbl, right]{mismatch} (g);
+        \draw[arr] (d.south) |- node[lbl, pos=0.75, below]{reject} (g.east);
+        \draw[arr] (f.south) |- node[lbl, pos=0.75, below]{row count differs} (g.west);
+    \end{tikzpicture}
+    \caption{Change-request workflow with re-validation at approval time.}
+    \label{fig:change_flow}
+\end{figure}
+
+\section{Configuration Parameters}
+All settings are defined in \texttt{app/core/config.py} with Pydantic Settings and can be
+overridden in \texttt{.env}. The most important values are listed in
+Table~\ref{tab:config}; the complete list is in Appendix~\ref{app:config}.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Key System Configuration Parameters (Defaults)}
+    \begin{tabular}{p{6.4cm} p{4.2cm} p{4.6cm}}
+        \toprule
+        \textbf{Parameter} & \textbf{Default} & \textbf{Role} \\
+        \midrule
+        \texttt{MODEL\_NAME}              & gemini-2.5-flash & SQL generation model \\[3pt]
+        \texttt{EMBEDDING\_MODEL}         & all-MiniLM-L6-v2 & 384-d dense embeddings \\[3pt]
+        \texttt{RERANKER\_MODEL}          & ms-marco-MiniLM-L-6-v2 & Cross-encoder reranker \\[3pt]
+        \texttt{RERANK\_WEIGHT}           & 0.6   & $\lambda$ in final score \\[3pt]
+        \texttt{MEMORY\_TOKEN\_BUDGET}    & 4000  & Prompt budget $B$ \\[3pt]
+        \texttt{MEMORY\_MAX\_RESULTS}     & 10    & Memories kept after ranking \\[3pt]
+        \texttt{RAG\_CANDIDATES}          & 30    & Vector candidates per search \\[3pt]
+        \texttt{RAG\_SCHEMA\_FULL\_TABLES}& 12    & Send full schema up to this size \\[3pt]
+        \texttt{RAG\_SCHEMA\_TOP\_TABLES} & 8     & Tables kept for large schemas \\[3pt]
+        \texttt{RAG\_EXAMPLES}            & 3     & Similar past questions in prompt \\[3pt]
+        \texttt{CONVERSATION\_HISTORY\_TURNS} & 6 & Recent turns considered \\[3pt]
+        \texttt{MAX\_QUERY\_ROWS}         & 100   & Row cap for reads \\[3pt]
+        \texttt{WRITE\_MAX\_ROWS}         & 50    & Row cap for one change \\[3pt]
+        \texttt{ALLOW\_DATA\_CHANGES}     & True  & Disable all changes when False \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:config}
+\end{table}
+
+\section{System Requirements}
+
+\subsection{Hardware Requirements}
+The system has no special hardware requirement. Embedding and reranking models are small
+MiniLM models that run on a CPU; a GPU is optional. The development and evaluation machine
+used in this project was a laptop with a 12th Gen Intel Core i5-12450HX processor, 16\,GB of
+RAM and an NVIDIA GeForce RTX 3050 (6\,GB) laptop GPU, running Windows 11.
+
+\subsection{Software Requirements}
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=3pt]
+    \item Python 3.10 or later.
+    \item FastAPI 0.111, Uvicorn 0.30, SQLAlchemy 2.0, Pydantic 2.7 and pydantic-settings.
+    \item sqlglot 25.2, qdrant-client 1.12, sentence-transformers 3.0, NumPy and pandas.
+    \item google-generativeai 0.7 and a Gemini API key (\texttt{LLM\_API\_KEY}).
+    \item Jinja2 and python-multipart for the web interface; htmx 2.0.3 loaded in the browser.
+    \item pytest and httpx for testing; psycopg2 for PostgreSQL targets.
+    \item Optional: Docker Compose file for a local PostgreSQL 15 target database.
+\end{itemize}

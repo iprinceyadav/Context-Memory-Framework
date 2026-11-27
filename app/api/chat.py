@@ -22,6 +22,7 @@ from app.services.changes import ChangeRefused, ChangeService, serialize, summar
 from app.services.context_builder import ContextBuilder, describe_results
 from app.services.connector import connector
 from app.services.encryption import decrypt
+from app.services.indexer import index_example
 from app.services.llm import llm
 from app.services.extraction import extractor
 from app.services.memory_store import MemoryStore
@@ -231,6 +232,7 @@ def ask(
             user_id=req.user_id,
             connection_id=target["connection_id"],
             conversation_id=conversation.id,
+            schema_key=schema_key,
         )
     except Exception as exc:
         logger.warning("ContextBuilder failed; falling back to schema-only prompt: %s", exc)
@@ -356,23 +358,23 @@ def ask(
     db.add(assistant_msg)
 
     query_meta = _query_metadata(question, plan.sql, plan.tables)
-    db.add(
-        QueryMemory(
-            organization_id=req.organization_id,
-            user_id=req.user_id,
-            connection_id=target["connection_id"],
-            conversation_id=conversation.id,
-            natural_language_query=question,
-            normalized_intent=query_meta["intent"],
-            sanitized_sql_template=mask_literals(plan.sql),
-            structured_query_metadata=json.dumps(query_meta),
-            execution_status="success",
-            schema_hash=schema_key,
-        )
+    query_record = QueryMemory(
+        organization_id=req.organization_id,
+        user_id=req.user_id,
+        connection_id=target["connection_id"],
+        conversation_id=conversation.id,
+        natural_language_query=question,
+        normalized_intent=query_meta["intent"],
+        sanitized_sql_template=mask_literals(plan.sql),
+        structured_query_metadata=json.dumps(query_meta),
+        execution_status="success",
+        schema_hash=schema_key,
     )
+    db.add(query_record)
     conversation.active_task_summary = question[:200]
     db.commit()
     db.refresh(assistant_msg)
+    index_example(query_record)
 
     background_tasks.add_task(
         _extract_in_background,

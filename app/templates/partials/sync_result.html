@@ -1,0 +1,15 @@
+<div class="sync-loader sync-result{% if error %} sync-failed{% endif %}">
+    {% if not error %}<div class="sync-check">✓</div>{% endif %}
+    <h3>{{ "Connection failed" if error else "Context ready!" }}</h3>
+    <div class="sync-steps">
+        {% for step in steps %}
+        <div class="sync-step {{ step.state }}">{{ step.label }}</div>
+        {% endfor %}
+    </div>
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% else %}
+    <p class="change-meta">{{ connection.name }}</p>
+    <div hx-get="/connect/ready" hx-trigger="load delay:700ms" hx-swap="none"></div>
+    {% endif %}
+</div>

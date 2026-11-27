@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.models.memory import Memory, MemoryAuditLog, MemoryVersion
 from app.services.embedder import embedder
+from app.services.indexer import sync_memory
+from app.services.vector_store import MEMORIES, vector_store
 from app.services.retrieval import MemoryRetriever
 
 logger = logging.getLogger(__name__)
@@ -145,6 +147,7 @@ class MemoryStore:
 
         self.db.commit()
         self.db.refresh(memory)
+        sync_memory(memory)
         return memory
 
     def get(self, memory_id: str, user_id: str, org_id: str) -> Memory:
@@ -189,14 +192,17 @@ class MemoryStore:
         memory.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(memory)
+        sync_memory(memory)
         return memory
 
     def delete(self, memory_id: str, user_id: str, org_id: str, hard_delete: bool = False) -> bool:
         memory = self._load_authorized(memory_id, user_id, org_id, require_write=True)
 
         if hard_delete:
+            memory_id = memory.id
             self.db.delete(memory)
             self.db.commit()
+            vector_store.delete(MEMORIES, [memory_id])
             return True
 
         memory.status = "deleted"
@@ -204,6 +210,7 @@ class MemoryStore:
         memory.updated_at = datetime.utcnow()
         self._audit(memory.id, "deleted", user_id, "Memory deleted and embedding cleared")
         self.db.commit()
+        sync_memory(memory)
         return True
 
     def approve(self, memory_id: str, user_id: str, org_id: str) -> Memory:
@@ -215,6 +222,7 @@ class MemoryStore:
         self._audit(memory.id, "approved", user_id, "Approved by user")
         self.db.commit()
         self.db.refresh(memory)
+        sync_memory(memory)
         return memory
 
     def reject(self, memory_id: str, user_id: str, org_id: str) -> Memory:
@@ -224,6 +232,7 @@ class MemoryStore:
         self._audit(memory.id, "rejected", user_id, "Rejected by user")
         self.db.commit()
         self.db.refresh(memory)
+        sync_memory(memory)
         return memory
 
     def expire(self, memory_id: str, user_id: str, org_id: str) -> Memory:
@@ -234,6 +243,7 @@ class MemoryStore:
         self._audit(memory.id, "expired", user_id, "Memory expired")
         self.db.commit()
         self.db.refresh(memory)
+        sync_memory(memory)
         return memory
 
     def supersede(
@@ -267,6 +277,8 @@ class MemoryStore:
             initial_status="approved" if auto_approve else "pending",
             auto_approve=auto_approve,
         )
+        self.db.refresh(previous)
+        sync_memory(previous)
         return replacement
 
     def list_visible(

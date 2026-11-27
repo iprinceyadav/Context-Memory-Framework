@@ -1,0 +1,35 @@
+{% extends "workspace.html" %}
+{% block title %}Memories · CMF{% endblock %}
+{% block main %}
+<header class="workspace-header header-row">
+    <h2>Memories</h2>
+    <button type="button" class="btn-secondary small-btn" hx-get="/memories/panel" hx-include="#memory-toolbar" hx-target="#memory-panel">Refresh</button>
+</header>
+
+<div class="dashboard-body">
+    {% if notice %}<div class="notice-msg success-msg">{{ notice }}</div>{% endif %}
+
+    {% include "partials/memory_stats.html" %}
+
+    <form id="memory-toolbar" class="memory-toolbar" hx-get="/memories/panel" hx-target="#memory-panel" hx-trigger="submit, change">
+        <input type="text" id="memory-search-input" name="q" value="{{ q }}" placeholder="Search" aria-label="Search memories">
+        <select id="memory-filter-type" name="memory_type" aria-label="Memory type">
+            <option value="">Type</option>
+            {% for value in memory_types %}
+            <option value="{{ value }}"{% if value == memory_type %} selected{% endif %}>{{ value | capitalize }}</option>
+            {% endfor %}
+        </select>
+        <select id="memory-filter-status" name="status" aria-label="Memory status">
+            <option value="">Status</option>
+            {% for value in memory_statuses %}
+            <option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ value | capitalize }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary small-btn">Go</button>
+    </form>
+
+    <div id="memory-panel">
+        {% include "partials/memory_panel.html" %}
+    </div>
+</div>
+{% endblock %}

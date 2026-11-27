@@ -1,0 +1,65 @@
+{% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+{% if not data.results_exists and not data.dataset_exists %}
+<div class="schema-placeholder">
+    No results. Click <strong>Run</strong>.
+</div>
+{% else %}
+{% set results = data.results or {} %}
+{% set retrieval = results.get("retrieval_metrics") or {} %}
+{% set comparison = results.get("comparison") or {} %}
+{% set baseline = comparison.get("baseline_nl2sql_without_memory") or {} %}
+{% set context_aware = comparison.get("context_aware_nl2sql_with_memory") or {} %}
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Cases</div><div class="stat-value">{{ results.get("dataset_size", data.total_dataset_count) }}</div></div>
+    <div class="stat-card"><div class="stat-label">Context inclusion</div><div class="stat-value text-success">{{ context_aware.get("rule_aware_sql_accuracy") | percent }}</div></div>
+    <div class="stat-card"><div class="stat-label">Baseline</div><div class="stat-value text-warning">{{ baseline.get("rule_aware_sql_accuracy") | percent }}</div></div>
+    <div class="stat-card"><div class="stat-label">Isolation</div><div class="stat-value text-success">{{ context_aware.get("isolation_pass_rate") | percent }}</div></div>
+</div>
+
+<div class="detail-section">
+    <div class="block-label">Retrieval</div>
+    <div class="result-table-wrapper">
+        <table class="result-table">
+            <thead><tr><th>Precision@3</th><th>Recall@3</th><th>MRR</th><th>Latency</th><th>Updates</th><th>Tokens</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td>{{ retrieval.get("precision_at_3") | percent }}</td>
+                    <td>{{ retrieval.get("recall_at_3") | percent }}</td>
+                    <td>{{ retrieval.get("mrr", "—") }}</td>
+                    <td>{{ retrieval.get("avg_retrieval_latency_ms", "—") }} ms</td>
+                    <td>{{ context_aware.get("memory_update_accuracy") | percent }}</td>
+                    <td>{{ baseline.get("avg_prompt_tokens", "—") }} / {{ context_aware.get("avg_prompt_tokens", "—") }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="detail-section">
+    <div class="memory-toolbar">
+        <select id="eval-category-filter" name="category" aria-label="Category" hx-get="/evaluation/body" hx-trigger="change" hx-target="#evaluation-body">
+            <option value="">All ({{ data.total_dataset_count }})</option>
+            {% for value in data.categories %}
+            <option value="{{ value }}"{% if value == category %} selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+        <span class="text-muted">{{ data.dataset | length }}</span>
+    </div>
+    <div class="result-table-wrapper scroll-table">
+        <table class="result-table">
+            <thead><tr><th>ID</th><th>Category</th><th>Query</th><th>Memory</th><th>Expected</th></tr></thead>
+            <tbody>
+                {% for item in data.dataset %}
+                <tr>
+                    <td>{{ item.get("id", "") }}</td>
+                    <td><span class="badge">{{ item.get("category", "") }}</span></td>
+                    <td class="wrap-cell">{{ item.get("query") or item.get("followup_query") or "" }}</td>
+                    <td class="wrap-cell">{{ item.get("memory") or item.get("updated_memory") or (item.get("memories") or []) | join(" | ") }}</td>
+                    <td class="wrap-cell">{{ item.get("expected_sql_pattern") or item.get("expected_memory") or item.get("expected_topic") or item.get("isolation_type") or "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}

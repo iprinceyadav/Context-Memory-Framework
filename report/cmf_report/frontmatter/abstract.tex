@@ -1,0 +1,41 @@
+% ABSTRACT — exactly one page
+\newpage
+\thispagestyle{plain}
+\begingroup
+\setlength{\parskip}{6pt}
+\setstretch{1.5}
+\fontsize{12}{18}\selectfont
+
+\begin{center}
+    {\fontsize{16}{24}\selectfont\bfseries ABSTRACT\\[12pt]}
+\end{center}
+
+Large Language Models (LLMs) can translate plain-English questions into SQL, but a plain
+Natural Language to SQL (NL2SQL) pipeline breaks down inside an organization. Business
+rules such as ``revenue excludes cancelled orders'' are not in the schema, every session
+starts from zero, large schemas do not fit in a prompt, and executing model-written SQL on a
+live database is risky.
+
+This project presents the \textbf{Context Memory Framework (CMF)}, a context-aware NL2SQL
+assistant built around a \textbf{persistent, governed context-memory layer}. CMF stores
+semantic, procedural and episodic memories plus structured working memory, keeps extracted
+memories \textit{pending} until a person approves them, versions and audits every change,
+and never stores one-time overrides as permanent rules. Memories, schema tables and past
+questions are indexed in \textbf{Qdrant} and retrieved by hybrid dense--sparse search with
+reciprocal rank fusion, a weighted first-stage score and a cross-encoder reranker, always
+after authorization filters. A token-budgeted context builder assembles a prioritized prompt
+that frames memories as untrusted data, and a deterministic \texttt{sqlglot} guard allows
+only one read query, or one single-table change that an admin must approve.
+
+The system is implemented with FastAPI, SQLAlchemy, Google Gemini and a server-rendered
+Jinja2/htmx interface. All 64 automated tests pass. On a 120-case synthetic benchmark, the
+current pipeline reaches Recall@3 of 0.79 and MRR of 0.73, includes the target business
+context in 97.5\% of built prompts, and shows no cross-tenant or cross-user memory leakage.
+
+\vspace{0.6cm}
+\noindent\textbf{Keywords:}\enspace Natural Language to SQL, Large Language Models,
+Context Engineering, Long-Term Memory, Retrieval-Augmented Generation, Hybrid Search,
+Reranking, SQL Guardrails, FastAPI.
+
+\endgroup
+\clearpage

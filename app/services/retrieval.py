@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import math
-import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -13,21 +12,14 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.memory import Memory
 from app.services.embedder import embedder
+from app.services.reranker import reranker
+from app.services.text import tokenize
+from app.services.vector_store import MEMORIES, all_of, any_of, match, match_any, vector_store
 
 logger = logging.getLogger(__name__)
 
 _HALF_LIFE_DAYS: float = 30.0
 _DUPLICATE_THRESHOLD: float = 0.96
-
-_STOP_WORDS: Set[str] = {
-    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "is", "it", "by", "with", "as", "was", "that", "this", "are",
-    "be", "has", "had", "have", "not", "from", "will", "can", "do", "does",
-    "did", "been", "if", "so", "no", "what", "when", "where", "which",
-    "who", "how", "all", "each", "every", "both", "few", "more", "most",
-    "other", "some", "such", "than", "too", "very", "just", "about", "show",
-    "me", "my", "get", "give", "list",
-}
 
 _INTENT_TYPES: Dict[str, List[str]] = {
     "revenue": ["semantic", "business_rule"],
@@ -54,11 +46,6 @@ _INTENT_TYPES: Dict[str, List[str]] = {
 }
 
 _INACTIVE_STATUSES: Set[str] = {"rejected", "deleted", "expired"}
-
-
-def _tokenize(text: str) -> Set[str]:
-    words = set(re.findall(r"[a-z0-9_]+", text.lower()))
-    return words - _STOP_WORDS
 
 
 def _load_vector(raw: Optional[str]) -> List[float]:
@@ -127,6 +114,7 @@ def _asks_history(query_text: str) -> bool:
 class MemoryRetriever:
     def __init__(self, db: Session) -> None:
         self.db = db
+        self.trace: Dict[str, Any] = {}
 
     def _authorize(
         self,
@@ -171,6 +159,8 @@ class MemoryRetriever:
             return [], []
 
         now = datetime.utcnow()
+        auto_historical = include_superseded or _asks_history(query)
+        self.trace = {"mode": "scan", "candidates": 0, "reranker": None}
 
         memories_query = self.db.query(Memory)
         memories_query = self._authorize(memories_query, organization_id, user_id, connection_id)
@@ -178,11 +168,18 @@ class MemoryRetriever:
         if memory_types:
             memories_query = memories_query.filter(Memory.memory_type.in_(memory_types))
 
+        candidate_ids = self._vector_candidates(
+            query, organization_id, user_id, connection_id, memory_types, only_approved, auto_historical, limit
+        )
+        if candidate_ids is not None:
+            self.trace.update(mode="vector", candidates=len(candidate_ids))
+            if not candidate_ids:
+                return [], []
+            memories_query = memories_query.filter(Memory.id.in_(candidate_ids))
+
         all_authorized: List[Memory] = memories_query.all()
         if not all_authorized:
             return [], []
-
-        auto_historical = include_superseded or _asks_history(query)
 
         candidates: List[Memory] = []
         excluded: List[dict] = []
@@ -209,7 +206,7 @@ class MemoryRetriever:
             return [], excluded
 
         query_embedding: List[float] = embedder.embed(query)
-        query_tokens: Set[str] = _tokenize(query)
+        query_tokens: Set[str] = tokenize(query)
 
         vector_weight = settings.RETRIEVAL_WEIGHT_VECTOR
         keyword_weight = settings.RETRIEVAL_WEIGHT_KEYWORD
@@ -236,7 +233,7 @@ class MemoryRetriever:
 
             content_text = memory.content or ""
             subject_text = memory.subject or ""
-            content_tokens = _tokenize(f"{content_text} {subject_text}")
+            content_tokens = tokenize(f"{content_text} {subject_text}")
             keyword_score = _keyword_overlap(query_tokens, content_tokens)
             recency_score = _recency(memory.created_at)
             importance_score = _importance(memory.importance)
@@ -289,6 +286,7 @@ class MemoryRetriever:
                 "_model": memory,
             })
 
+        scored = self._rerank(query, scored, excluded)
         scored.sort(key=lambda x: x["combined_score"], reverse=True)
         selected = scored[:limit]
         for overflow in scored[limit:]:
@@ -300,6 +298,78 @@ class MemoryRetriever:
             })
 
         return selected, excluded
+
+    def _vector_candidates(
+        self,
+        query: str,
+        organization_id: str,
+        user_id: str,
+        connection_id: Optional[str],
+        memory_types: Optional[List[str]],
+        only_approved: bool,
+        historical: bool,
+        limit: int,
+    ) -> Optional[List[str]]:
+        if not vector_store.available:
+            return None
+        statuses = ["approved"]
+        if not only_approved:
+            statuses.append("pending")
+        if historical:
+            statuses.append("superseded")
+        conditions = [
+            match("organization_id", organization_id),
+            any_of(match("user_id", user_id), match("visibility", "shared")),
+            match_any("status", statuses),
+        ]
+        if memory_types:
+            conditions.append(match_any("memory_type", memory_types))
+        excluded_scopes = []
+        if connection_id is not None:
+            conditions.append(
+                any_of(
+                    match("connection_id", connection_id),
+                    all_of(match("connection_id", ""), none_of=[match("scope", "connection")]),
+                )
+            )
+        else:
+            excluded_scopes.append(match("scope", "connection"))
+        hits = vector_store.search(
+            MEMORIES,
+            query,
+            all_of(*conditions, none_of=excluded_scopes),
+            limit=max(settings.RAG_CANDIDATES, limit),
+        )
+        if hits is None:
+            return None
+        return [hit.id for hit in hits]
+
+    def _rerank(self, query: str, scored: List[dict], excluded: List[dict]) -> List[dict]:
+        if not scored:
+            return scored
+        scores = reranker.score(
+            query,
+            [f"{item['subject']}: {item['content']}" if item["subject"] else item["content"] for item in scored],
+        )
+        if scores is None:
+            return scored
+        self.trace["reranker"] = reranker.name
+        weight = settings.RERANK_WEIGHT
+        kept: List[dict] = []
+        for item, score in zip(scored, scores):
+            item["first_stage_score"] = item["combined_score"]
+            item["rerank_score"] = round(score, 4)
+            item["combined_score"] = round(weight * score + (1 - weight) * item["combined_score"], 4)
+            if settings.RERANK_MIN_SCORE and score < settings.RERANK_MIN_SCORE:
+                excluded.append({
+                    "memory_id": item["memory_id"],
+                    "content": item["content"],
+                    "reason": "below_relevance_threshold",
+                    "combined_score": item["combined_score"],
+                })
+                continue
+            kept.append(item)
+        return kept
 
     def search(
         self,

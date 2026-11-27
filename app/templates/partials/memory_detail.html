@@ -1,0 +1,51 @@
+<div class="modal-overlay" data-modal>
+    <div class="connect-modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="memory-detail-title">
+        <div class="modal-header header-row">
+            <div>
+                <h2 id="memory-detail-title">Memory</h2>
+            </div>
+            <button type="button" class="btn-icon" data-close-modal aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="detail-grid">
+                <div><strong>Type:</strong> {{ memory.memory_type }}</div>
+                <div><strong>Status:</strong> {{ memory.status }}</div>
+                <div><strong>Scope:</strong> {{ memory.scope }} ({{ memory.visibility }})</div>
+                <div><strong>Subject:</strong> {{ memory.subject or "—" }}</div>
+                <div><strong>Confidence:</strong> {{ memory.confidence }} · <strong>Weight:</strong> {{ memory.importance }}</div>
+                <div><strong>Database:</strong> {{ memory.connection_id or "Any" }}</div>
+                <div><strong>Source:</strong> {{ memory.source_conversation_id or "Manual" }}</div>
+                <div><strong>Message:</strong> {{ memory.source_message_id or "—" }}</div>
+                <div><strong>Created:</strong> {{ memory.created_at }}</div>
+                <div><strong>Until:</strong> {{ memory.valid_to or "Active" }}</div>
+            </div>
+            <div class="detail-section">
+                <div class="block-label">Content</div>
+                <div class="detail-content-box">{{ memory.content }}</div>
+            </div>
+            <div class="detail-section">
+                <div class="block-label">Version History ({{ versions | length }})</div>
+                {% for version in versions %}
+                <div class="version-row">
+                    <span class="badge">v{{ version.version_number }}</span>
+                    <span>{{ version.updated_content }}</span>
+                    <small class="text-muted">{{ version.change_reason or "" }}</small>
+                </div>
+                {% else %}
+                <div class="schema-placeholder">None</div>
+                {% endfor %}
+            </div>
+            <div class="detail-section">
+                <div class="block-label">Audit ({{ audits | length }})</div>
+                {% for audit in audits %}
+                <div class="version-row">
+                    <span class="badge">{{ audit.action }}</span>
+                    <span>{{ audit.details or "" }}</span>
+                </div>
+                {% else %}
+                <div class="schema-placeholder">None</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>

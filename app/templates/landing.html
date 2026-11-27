@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block body %}
+<section id="view-landing" class="view-section">
+    <div class="landing-content">
+        <div class="landing-mark">CM</div>
+        <h1 class="landing-title">Context Memory Framework</h1>
+        <p class="landing-subtitle">Ask your data in plain English.</p>
+
+        <form class="user-type-form" method="post" action="/session/user-type">
+            <p class="user-type-question">Choose your role</p>
+            <div class="user-type-options">
+                {% for key, meta in user_types.items() %}
+                <button type="submit" name="user_type" value="{{ key }}" class="user-type-option{% if ws.onboarded and ws.user_type == key %} selected{% endif %}">
+                    <strong>{{ meta.label }}</strong>
+                    <span>{{ meta.summary }}</span>
+                </button>
+                {% endfor %}
+            </div>
+        </form>
+
+        {% if ws.onboarded and ws.connection %}
+        <p class="landing-connected">{{ ws.connection.name }} · <a href="/chat">Open workspace →</a></p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

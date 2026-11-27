@@ -12,6 +12,10 @@ from app.main import app
 from app.models import Base, DatabaseConnection, Organization, User
 from app.services.embedder import EmbeddingProvider, embedder
 from app.services.encryption import encrypt
+from app.services.llm import llm
+from app.services.reranker import RerankProvider, reranker
+from app.services.text import tokenize
+from app.services.vector_store import vector_store
 
 
 class HashEmbeddingProvider(EmbeddingProvider):
@@ -40,6 +44,29 @@ def hash_embeddings():
     embedder.set_provider(HashEmbeddingProvider())
     yield
     embedder.set_provider(prev_provider)
+
+
+class OverlapReranker(RerankProvider):
+    name = "test-overlap"
+
+    def score(self, query, documents):
+        terms = tokenize(query)
+        return [len(terms & tokenize(doc)) / len(terms) if terms else 0.0 for doc in documents]
+
+
+@pytest.fixture(autouse=True)
+def offline_llm(monkeypatch):
+    monkeypatch.setattr(llm, "enabled", False)
+
+
+@pytest.fixture(autouse=True)
+def rag_stack(hash_embeddings):
+    vector_store.configure(":memory:")
+    previous = reranker._provider
+    reranker.set_provider(OverlapReranker())
+    yield
+    reranker.set_provider(previous)
+    vector_store.configure(None)
 
 
 @pytest.fixture()
@@ -175,3 +202,7 @@ def second_connection(db_session, sample_org):
     db_session.commit()
     db_session.refresh(conn)
     return conn
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "fresh_visitor: skip choosing a user type before the test")

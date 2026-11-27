@@ -11,7 +11,10 @@ __pycache__/
 *.so
 
 # Databases
+vector_store/
+uploads/
 *.db
+!sample_dbs/*.db
 *.sqlite3
 
 # Testing

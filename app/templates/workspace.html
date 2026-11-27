@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<section id="view-workspace" class="view-section">
+    {% include "partials/sidebar.html" %}
+    <main class="workspace-main">
+        <div class="workspace-tab" id="tab-{{ page }}">
+            {% block main %}{% endblock %}
+        </div>
+    </main>
+    {% block right %}{% endblock %}
+</section>
+{% endblock %}

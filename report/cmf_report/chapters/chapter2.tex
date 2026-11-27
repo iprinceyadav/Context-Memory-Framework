@@ -1,0 +1,209 @@
+% CHAPTER 2 - LITERATURE REVIEW
+\chapter{Literature Review}
+
+\section{Introduction}
+This chapter reviews the research that the Context Memory Framework builds on. The project
+sits at the intersection of four lines of work. The first is \textit{Natural Language to
+SQL}, which has moved from task-specific neural parsers to prompting general-purpose Large
+Language Models. The second is \textit{retrieval}, in particular retrieval-augmented
+generation, dense and sparse retrieval, rank fusion and reranking. The third is
+\textit{memory for LLM-based agents}, which organizes what a system remembers across
+interactions. The fourth is the \textit{security} of LLM-integrated applications, where
+prompt injection and unsafe tool use are now well documented.
+
+Each of these areas solves part of the problem described in Chapter~1. NL2SQL research
+shows how to produce SQL from a question and a schema; retrieval research shows how to
+select relevant text from a large store; memory research shows how to keep and organize
+knowledge over time; and security research shows what can go wrong when model output is
+executed. The final section identifies what is missing when these pieces are used in
+isolation, which defines the contribution of this project.
+
+\section{Evolution of Natural Language to SQL}
+
+\subsection{Early Neural Approaches and Benchmarks}
+Translating questions into database queries is a long-standing problem in natural
+language interfaces to databases. Neural sequence-to-sequence models made the task
+data-driven. Seq2SQL \cite{zhong2017seq2sql} introduced the WikiSQL dataset and generated
+single-table queries, using reinforcement learning with query execution as a reward signal
+for the unordered parts of the query.
+
+Spider \cite{yu2018spider} raised the difficulty by introducing a large, cross-domain
+benchmark of 10,181 questions and 5,693 unique complex SQL queries over 200 multi-table
+databases covering 138 domains, with databases in the test set unseen during training. This
+forced models to generalize to new schemas, joins, nesting and grouping rather than
+memorize a fixed database. BIRD \cite{li2023bird} moved closer to real enterprise use with
+12,751 question--SQL pairs over 95 large databases totalling 33.4\,GB across 37
+professional domains. BIRD explicitly provides \textit{external knowledge evidence} for
+many questions, recognizing that the meaning of a question frequently depends on domain
+knowledge that cannot be read from the schema.
+
+\subsection{Schema Linking}
+A central sub-problem is \textit{schema linking}: deciding which tables and columns a
+question refers to. RESDSQL \cite{li2023resdsql} decouples schema linking from skeleton
+parsing and uses a ranking-enhanced encoder that keeps only the most relevant schema items
+in the model input. This idea, selecting a relevant subset of the schema before
+generation, is important for large schemas and is used in this project through vector
+search over table descriptions combined with foreign-key expansion.
+
+\section{Large Language Models for Text-to-SQL}
+With the arrival of large code-capable language models, NL2SQL moved from training
+specialized parsers to prompting. Rajkumar et al.\ \cite{rajkumar2022evaluating} evaluated
+Codex on Spider and found that a prompt containing the database's \texttt{CREATE TABLE}
+statements and a few sample rows gave competitive results without fine-tuning. DIN-SQL
+\cite{pourreza2023dinsql} decomposed the task into schema linking, query classification and
+decomposition, generation, and self-correction, showing that structuring the prompt
+pipeline improves accuracy. DAIL-SQL \cite{gao2023dailsql} systematically compared question
+representations, example selection and example organization for in-context learning, and
+showed that retrieving \textit{similar past question--SQL pairs} as examples is an effective
+form of context.
+
+These results share one message: with capable models, accuracy depends strongly on
+\textit{what} context is placed in the prompt and \textit{how} it is organized. They also
+share an assumption that the needed knowledge is contained in the schema, the question, the
+examples, or (in BIRD) an evidence string supplied with the benchmark. In an organization
+nobody supplies that evidence per question; it has to be remembered and retrieved.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Representative NL2SQL Work and the Context Each Approach Relies On}
+    \begin{tabular}{p{3.2cm} p{4.6cm} p{5.2cm}}
+        \toprule
+        \textbf{Work} & \textbf{Main idea} & \textbf{Context used for generation} \\
+        \midrule
+        Seq2SQL \cite{zhong2017seq2sql} & Seq2seq with RL on execution & Question + single table \\[4pt]
+        Spider \cite{yu2018spider}      & Cross-domain benchmark & Question + full schema \\[4pt]
+        RESDSQL \cite{li2023resdsql}    & Ranked schema filtering & Question + top schema items \\[4pt]
+        BIRD \cite{li2023bird}          & Large realistic databases & Question + schema + given evidence \\[4pt]
+        DIN-SQL \cite{pourreza2023dinsql} & Decomposed prompting & Question + schema links + sub-steps \\[4pt]
+        DAIL-SQL \cite{gao2023dailsql}  & Example selection study & Question + schema + similar examples \\[4pt]
+        \textbf{CMF (this work)}        & Governed memory layer & Question + selected schema + approved memories + examples + history \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:nl2sql_survey}
+\end{table}
+
+\section{Retrieval-Augmented Generation and Hybrid Search}
+
+\subsection{Retrieval-Augmented Generation}
+Lewis et al.\ \cite{lewis2020rag} introduced Retrieval-Augmented Generation (RAG), which
+combines a parametric generator with a non-parametric memory: a retriever selects passages
+from an external index and the generator conditions on them. RAG makes knowledge updatable
+without retraining and lets the system show which sources were used. CMF applies the same
+pattern, but the ``documents'' are short business memories, table descriptions and past
+question--SQL pairs rather than long passages.
+
+\subsection{Sparse and Dense Retrieval}
+Classical retrieval scores documents by term statistics. The BM25 function
+\cite{robertson2009bm25} weights each matching term by its inverse document frequency and a
+saturating function of its frequency in the document, so that repeated terms contribute
+with diminishing returns. Sparse methods are precise for exact identifiers such as column
+names (\texttt{invoice\_date}), which matter greatly in NL2SQL.
+
+Dense retrieval encodes queries and documents as vectors in a shared space. Dense Passage
+Retrieval \cite{karpukhin2020dpr} showed that a learned dual encoder can outperform BM25 for
+open-domain question answering. Sentence-BERT \cite{reimers2019sbert} produced sentence
+embeddings suitable for cosine-similarity search, and MiniLM \cite{wang2020minilm}
+distillation produced compact models; the \texttt{all-MiniLM-L6-v2} model used in this
+project produces 384-dimensional embeddings. Dense vectors capture paraphrases such as
+``uncollectible receivables'' versus ``write-offs'', but can miss exact tokens. Approximate
+nearest-neighbour indexes such as HNSW \cite{malkov2018hnsw} make dense search fast at scale
+and are used by vector databases such as Qdrant \cite{qdrantdocs}.
+
+\subsection{Rank Fusion and Reranking}
+Because sparse and dense retrieval fail in different ways, they are often combined.
+Reciprocal Rank Fusion (RRF) \cite{cormack2009rrf} merges ranked lists without needing
+comparable scores:
+\begin{equation}
+    \text{RRF}(d) = \sum_{r \in \mathcal{R}} \frac{1}{k + \text{rank}_r(d)}
+\end{equation}
+where $\mathcal{R}$ is the set of rankings and $k$ is a constant (60 in the original
+paper). Rank fusion is simple and robust, which is why it is offered natively by modern
+vector databases.
+
+A second stage then reorders a small candidate set with a more expensive model. Nogueira
+and Cho \cite{nogueira2019passage} showed that a BERT cross-encoder, which reads the query
+and the passage together, substantially improves passage ranking on MS MARCO
+\cite{bajaj2016msmarco}. The \texttt{cross-encoder/ms-marco-MiniLM-L-6-v2} reranker used in
+this project follows this design.
+
+\section{Memory Architectures for LLM Agents}
+
+\subsection{Cognitive Memory Categories}
+Cognitive psychology distinguishes \textit{semantic} memory (general facts and meanings)
+from \textit{episodic} memory (specific experienced events) \cite{tulving1972episodic}, and
+both from \textit{procedural} memory (how to do things). The CoALA framework
+\cite{sumers2023coala} applies this taxonomy to language agents, describing a short-term
+\textit{working memory} and long-term episodic, semantic and procedural memories, together
+with actions that retrieve from and write to them. CMF adopts this vocabulary directly:
+business definitions are semantic, formatting and column-usage preferences are procedural,
+notable analytical events are episodic, and the current conversation plus the last
+structured query form working memory.
+
+\subsection{Retrieval from Long-Term Memory}
+Generative Agents \cite{park2023generative} store an agent's experiences in a memory stream
+and retrieve them by a combination of \textit{recency} (exponential decay), \textit{importance}
+(a score assigned when the memory is written) and \textit{relevance} (embedding similarity).
+MemGPT \cite{packer2023memgpt} treats the limited context window like main memory in an
+operating system and pages information in and out of external storage. Both show that what
+reaches the prompt should be selected by an explicit policy rather than by appending
+history.
+
+CMF's first-stage score follows the same principle, extending it with keyword overlap and
+a memory-type match, and adding a cross-encoder reranker. Unlike these agent systems, CMF
+operates in a multi-user organization, so memory retrieval must also respect ownership,
+sharing and database scope, and memories written by the model must be reviewed by people.
+
+\section{Context Engineering and Long Prompts}
+Longer context windows do not guarantee that information is used. Liu et al.\
+\cite{liu2023lost} showed that models use information at the beginning and end of a long
+context more reliably than information in the middle (``lost in the middle''). This
+supports selecting a small, relevant context and placing the most important material in
+deliberate positions. In CMF, the system rules and the live schema always come first, the
+current question and the generation requirements always come last, and optional sections
+are admitted in priority order under a token budget.
+
+A second concern is the \textit{authority} of each part of the prompt. When retrieved text
+is mixed with instructions, the model cannot reliably tell them apart. Making the priority
+order explicit, and labelling retrieved memories as untrusted data, is a lightweight form of
+the separation that security research recommends.
+
+\section{Security of LLM-Generated SQL}
+Greshake et al.\ \cite{greshake2023indirect} demonstrated \textit{indirect prompt
+injection}: instructions planted in data that an LLM-integrated application later
+retrieves can take control of the model's behaviour. Pedro et al.\ \cite{pedro2023prompt}
+studied LLM-integrated web applications built with LangChain and showed
+\textit{prompt-to-SQL} injection attacks in which a user's natural-language input leads the
+model to generate destructive or data-leaking SQL. The OWASP Top~10 for LLM Applications
+\cite{owasp2023llm} lists prompt injection and excessive agency among the main risks of
+such systems.
+
+For NL2SQL, these findings mean that (i) stored memories are a persistent injection
+surface, (ii) instructions in the system prompt are not a sufficient defence, and (iii) the
+application should limit what generated statements can do independently of the model.
+Parsing SQL into an abstract syntax tree, as the \texttt{sqlglot} library does
+\cite{sqlglotdocs}, allows a deterministic classification of each statement before
+execution. Human approval for any change that modifies data limits the agency of the
+model to proposing, not executing.
+
+\section{Literature Gap}
+The reviewed work provides strong individual components but leaves a gap for NL2SQL
+inside organizations:
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=4pt]
+    \item NL2SQL research assumes that external knowledge is given with each question
+          \cite{li2023bird}; it does not address how such knowledge is captured from
+          conversations, reviewed, versioned and kept current.
+    \item Agent memory systems \cite{park2023generative, packer2023memgpt} rank memories by
+          relevance, recency and importance but do not combine ranking with multi-tenant
+          authorization, human approval and explicit superseding of outdated rules.
+    \item Hybrid retrieval and reranking \cite{cormack2009rrf, nogueira2019passage} are
+          rarely applied jointly to business memories, schema tables and past question
+          examples in one pipeline whose decisions are visible to the user.
+    \item Security work describes prompt and SQL injection risks
+          \cite{greshake2023indirect, pedro2023prompt} but few NL2SQL prototypes integrate
+          a deterministic statement planner, read-only execution, masking and approved,
+          re-validated data changes.
+\end{itemize}
+The Context Memory Framework addresses this gap with a single, inspectable pipeline that
+combines governed long-term memory, authorization-first hybrid retrieval, prioritized
+context assembly and deterministic SQL guardrails.

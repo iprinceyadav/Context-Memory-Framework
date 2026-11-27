@@ -1,0 +1,50 @@
+{% extends "workspace.html" %}
+{% block title %}Ask · CMF{% endblock %}
+{% block main %}
+<header class="workspace-header header-row">
+    <h2>Ask</h2>
+    <button type="button" class="btn-secondary small-btn" data-toggle-panel>Context</button>
+</header>
+
+<div id="pending-banner-slot"></div>
+
+<div class="chat-container" id="chat-container">
+    {% if not messages %}
+    <div class="empty-state" id="workspace-empty">
+        {% if ws.connection %}
+        <h3>{{ ws.connection.name }}</h3>
+        <p>{{ ws.access_label }}</p>
+        {% else %}
+        <h3>No database</h3>
+        <a href="/connect" class="btn-primary">Connect</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="chat-history" id="chat-history">
+        {% for message in messages %}
+        {% if message.role == "user" %}
+        <div class="message msg-user"><div class="msg-content">{{ message.content }}</div></div>
+        {% else %}
+        <div class="message msg-bot">
+            <div class="msg-content">
+                <div class="nl-answer">{{ message.content }}</div>
+                {% if message.sql_query %}<pre class="inline-sql"><code>{{ message.sql_query | highlight_sql }}</code></pre>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<div class="query-composer-wrapper">
+    <form id="chat-form" class="query-composer" hx-post="/chat/ask" hx-target="#chat-history" hx-swap="beforeend">
+        {% include "partials/conversation_input.html" %}
+        <textarea id="query-input" name="question" placeholder="Ask anything…" rows="1" required aria-label="Question"></textarea>
+        <div class="composer-actions">
+            <button type="submit" id="btn-send-query" class="btn-primary">Send</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% block right %}{% include "partials/context_panel.html" %}{% endblock %}

@@ -1,0 +1,82 @@
+% CHAPTER 6 - CONCLUSION AND FUTURE WORK
+\chapter{Conclusion and Future Work}
+
+\section{Conclusion}
+This project designed, implemented and evaluated the Context Memory Framework, a
+context-aware Natural Language to SQL assistant built around a persistent, governed
+context-memory layer. The work started from four practical shortcomings of plain NL2SQL in
+an organization: business knowledge missing from the schema, stateless interaction, schemas
+too large for a prompt, and the risk of executing model-written SQL.
+
+CMF answers each of them with a concrete mechanism. Business knowledge is stored as
+semantic, procedural and episodic memories with scope, visibility, importance, validity and
+provenance; model-extracted memories stay pending until a person approves them, every edit
+is versioned and audited, corrections supersede old definitions, and one-time overrides are
+never stored. Statelessness is addressed by working memory: recent turns and a structured
+record of the previous query, with follow-up questions retrieved using the previous
+question. Large schemas are reduced to the most relevant tables plus their foreign-key
+neighbours. Safety is enforced deterministically: one read in a rolled-back transaction with
+a row cap and masking, or one single-table change that an admin must approve and that is
+re-validated before it runs.
+
+Retrieval combines dense and sparse search with reciprocal rank fusion, a weighted
+relevance score and a cross-encoder reranker, always after authorization filters, and every
+decision is recorded and shown in the Context Inspector. The evaluation showed that all 64
+automated tests pass and that, on a 120-case synthetic benchmark, the current pipeline
+reaches Recall@3 of 0.79 and MRR of 0.73, includes the target context in 97.2\% of the
+checked cases, keeps definitions current in all superseding cases and leaks no memory
+across users or organizations. These results show that the context layer reliably delivers
+the right, authorized knowledge to the model; they do not yet measure how much this
+improves the correctness of the generated SQL.
+
+\section{Limitations}
+The following limitations of the current prototype are known and documented:
+\begin{itemize}[leftmargin=*, topsep=4pt, itemsep=3pt]
+    \item \textbf{No real authentication.} Identity is the organization and user identifier
+          sent with each request, \texttt{default-org}/\texttt{default-user} are created
+          automatically as owner, and the Admin/Employee choice in the web interface is a
+          demonstration, not a security boundary.
+    \item \textbf{Credential storage.} Connection passwords are base64-encoded, not
+          encrypted.
+    \item \textbf{Single LLM provider.} Only Google Gemini is supported, through the
+          \texttt{google-generativeai} package, which is now deprecated. Several settings
+          (\texttt{LLM\_PROVIDER}, \texttt{ENABLE\_LOCAL\_LLM}, \texttt{MAX\_RETRIES},
+          \texttt{ENFORCE\_READ\_ONLY\_SQL}, \texttt{MEMORY\_DEFAULT\_STATUS}) exist in the
+          configuration but are not read by the code.
+    \item \textbf{Latency.} A question can cause up to three LLM calls (SQL, answer and
+          background extraction), and the embedding and reranking models load on first use.
+    \item \textbf{Scalability.} Without Qdrant, retrieval scans every authorized memory row.
+          Embeddings are stored twice (JSON in the platform database and in Qdrant). Token
+          counts are approximated as characters divided by four.
+    \item \textbf{Operations.} CORS allows all origins, schema changes use a small list of
+          \texttt{ALTER} statements instead of a migration tool, and the MySQL connection URL
+          uses the \texttt{pymysql} driver, which is not listed in \texttt{requirements.txt}.
+    \item \textbf{Evaluation scope.} The benchmark is synthetic and does not execute an LLM;
+          end-to-end SQL accuracy was not measured.
+\end{itemize}
+
+\section{Future Scope}
+
+\subsection{End-to-End Evaluation}
+The most important next step is to measure SQL execution accuracy with and without the
+memory layer, for example on BIRD \cite{li2023bird}, whose external-knowledge evidence could
+be loaded as memories instead of being given per question, and on the five sample
+databases with hand-written questions and expected results.
+
+\subsection{Security Hardening}
+Real authentication (for example OpenID Connect) should replace the identifier-based
+identity, connection secrets should be encrypted, CORS should be restricted, and
+row-level policies could be added to the access model alongside table-level grants.
+
+\subsection{Retrieval and Memory Improvements}
+The scoring weights and the reranker weight were set by hand; they could be tuned on a
+labelled set of real questions. Memory consolidation could merge related memories, and
+schema drift could be handled by using the stored \texttt{schema\_hash} to flag memories that
+refer to dropped or renamed columns. An exact tokenizer would make the token budget precise.
+
+\subsection{Provider Flexibility, Performance and Usability}
+The LLM client could be migrated to the maintained Google SDK and extended to other
+providers, including local models, through the existing \texttt{LLM\_PROVIDER} setting;
+embedding and reranking models could be preloaded at start-up to remove first-request
+latency. Rendering Markdown in answers and charting numeric results would make the
+interface clearer for non-technical users.

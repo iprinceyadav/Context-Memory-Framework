@@ -7,6 +7,24 @@ from app.services.encryption import decrypt
 import hashlib
 import json
 
+import sqlglot
+from sqlglot import exp
+
+from app.services.access import is_sensitive
+from app.services.indexer import index_schema
+from app.services.sql_guard import dialect_for
+
+SAMPLE_TABLES = 200
+SAMPLE_COLUMNS = 12
+SAMPLE_SCAN = 1000
+SAMPLE_VALUES = 20
+_TEXT_TYPES = ("CHAR", "TEXT", "STRING", "ENUM", "CLOB")
+
+
+def _is_text(column_type: str) -> bool:
+    upper = (column_type or "").upper()
+    return any(marker in upper for marker in _TEXT_TYPES)
+
 
 class RowCountMismatch(Exception):
     def __init__(self, expected: int, changed: int):
@@ -77,21 +95,29 @@ class DatabaseConnector:
         return hashlib.sha256(identity.encode()).hexdigest()
 
     def sync_schema(self, db_type: str, username: str, password: str, host: str, port: int, db_name: str, platform_db: Session) -> dict:
+        engine = None
         try:
-            url = self.connection_url(db_type, username, password, host, port, db_name)
-            engine = create_engine(url, connect_args={"connect_timeout": 5} if db_type == "postgresql" else {})
-
+            engine = self.open_engine(db_type, username, password, host, port, db_name)
             inspector = inspect(engine)
             schema_data = {}
 
             for table_name in inspector.get_table_names():
+                references = {}
+                try:
+                    for key in inspector.get_foreign_keys(table_name):
+                        for local, remote in zip(key.get("constrained_columns") or [], key.get("referred_columns") or []):
+                            references[local] = f"{key.get('referred_table')}.{remote}"
+                except Exception:
+                    pass
                 columns = []
                 for col in inspector.get_columns(table_name):
-                    columns.append({
-                        "name": col["name"],
-                        "type": str(col["type"])
-                    })
+                    entry = {"name": col["name"], "type": str(col["type"])}
+                    if col["name"] in references:
+                        entry["references"] = references[col["name"]]
+                    columns.append(entry)
                 schema_data[table_name] = columns
+
+            self._sample_values(engine, db_type, schema_data)
 
             schema_json_str = json.dumps(schema_data)
             schema_key = self.fingerprint(db_type, username, host, port, db_name)
@@ -100,16 +126,35 @@ class DatabaseConnector:
             if existing_schema:
                 existing_schema.schema_json = schema_json_str
             else:
-                new_schema = DatabaseSchema(
-                    connection_hash=schema_key,
-                    schema_json=schema_json_str
-                )
-                platform_db.add(new_schema)
+                platform_db.add(DatabaseSchema(connection_hash=schema_key, schema_json=schema_json_str))
             platform_db.commit()
 
+            index_schema(schema_key, schema_data)
             return schema_data
         except Exception as e:
             raise Exception(f"Schema extraction failed: {str(e)}")
+        finally:
+            if engine is not None:
+                engine.dispose()
+
+    def _sample_values(self, engine: Engine, db_type: str, schema: dict) -> None:
+        dialect = dialect_for(db_type)
+        for table, columns in list(schema.items())[:SAMPLE_TABLES]:
+            candidates = [
+                column for column in columns
+                if _is_text(column["type"]) and "references" not in column and not is_sensitive(column["name"])
+            ][:SAMPLE_COLUMNS]
+            for column in candidates:
+                name = exp.column(column["name"], quoted=True)
+                scan = sqlglot.select(name.copy()).from_(exp.table_(table, quoted=True)).limit(SAMPLE_SCAN)
+                query = sqlglot.select(name.copy()).distinct().from_(scan.subquery("sample")).limit(SAMPLE_VALUES + 1)
+                try:
+                    rows, _ = self.read(engine, query.sql(dialect), SAMPLE_VALUES + 1)
+                except Exception:
+                    continue
+                values = sorted({str(value) for row in rows for value in row.values() if value is not None})
+                if 0 < len(values) <= SAMPLE_VALUES and all(len(value) <= 40 for value in values):
+                    column["values"] = values
 
     def engine_for(self, record: DatabaseConnection) -> Engine:
         if record.id in self._engines:
