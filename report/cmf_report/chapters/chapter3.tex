@@ -414,6 +414,35 @@ Columns whose names contain any configured sensitive pattern (password, secret, 
 api\_key, ssn, card\_number, cvv, pin\_code and others) are masked for non-admins in answers
 and previews.
 
+\subsection{Department Roles in the Web Interface}
+The web interface demonstrates this model with six roles that a visitor chooses on the
+landing page (Table~\ref{tab:roles}). Each role maps to a fixed user of the default
+organization. On every switch, \texttt{ensure\_user\_type} creates the user if needed, sets
+its platform role and synchronizes its grants: grants for the role's actions on all tables
+(\texttt{*}) are added and any other active grant of that user is revoked. Change requests
+from department roles stay pending and appear on the administrator's Requests page, while an
+administrator's own change requests show Apply and Discard buttons directly in the chat. As
+noted in Chapter~1, this role choice is a demonstration and not an authentication boundary.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Roles Offered by the Web Interface}
+    \begin{tabular}{p{2.4cm} p{2.4cm} p{4.4cm} p{5.2cm}}
+        \toprule
+        \textbf{Role} & \textbf{Platform role} & \textbf{Change grants (all tables)} & \textbf{Effect} \\
+        \midrule
+        Admin      & \texttt{owner}   & (all, as admin)                   & Reads unmasked; applies changes after preview \\[3pt]
+        Finance    & \texttt{analyst} & \texttt{update}                   & Requests edits for admin approval \\[3pt]
+        Sales      & \texttt{analyst} & \texttt{insert}, \texttt{update}  & Requests additions and edits \\[3pt]
+        Operations & \texttt{analyst} & \texttt{insert}, \texttt{update}, \texttt{delete} & Requests any change \\[3pt]
+        HR         & \texttt{viewer}  & none                              & Read-only \\[3pt]
+        Employee   & \texttt{viewer}  & none                              & Read-only \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:roles}
+\end{table}
+
 \subsection{Change Approval}
 Figure~\ref{fig:change_flow} shows the change workflow. The approval step re-plans the
 stored statement and recounts the matching rows; if the count differs from the preview,
@@ -454,19 +483,19 @@ Table~\ref{tab:config}; the complete list is in Appendix~\ref{app:config}.
         \toprule
         \textbf{Parameter} & \textbf{Default} & \textbf{Role} \\
         \midrule
-        \texttt{MODEL\_NAME}              & gemini-2.5-flash & SQL generation model \\[3pt]
-        \texttt{EMBEDDING\_MODEL}         & all-MiniLM-L6-v2 & 384-d dense embeddings \\[3pt]
-        \texttt{RERANKER\_MODEL}          & ms-marco-MiniLM-L-6-v2 & Cross-encoder reranker \\[3pt]
-        \texttt{RERANK\_WEIGHT}           & 0.6   & $\lambda$ in final score \\[3pt]
-        \texttt{MEMORY\_TOKEN\_BUDGET}    & 4000  & Prompt budget $B$ \\[3pt]
-        \texttt{MEMORY\_MAX\_RESULTS}     & 10    & Memories kept after ranking \\[3pt]
-        \texttt{RAG\_CANDIDATES}          & 30    & Vector candidates per search \\[3pt]
-        \texttt{RAG\_SCHEMA\_FULL\_TABLES}& 12    & Send full schema up to this size \\[3pt]
-        \texttt{RAG\_SCHEMA\_TOP\_TABLES} & 8     & Tables kept for large schemas \\[3pt]
-        \texttt{RAG\_EXAMPLES}            & 3     & Similar past questions in prompt \\[3pt]
-        \texttt{CONVERSATION\_HISTORY\_TURNS} & 6 & Recent turns considered \\[3pt]
-        \texttt{MAX\_QUERY\_ROWS}         & 100   & Row cap for reads \\[3pt]
-        \texttt{WRITE\_MAX\_ROWS}         & 50    & Row cap for one change \\[3pt]
+        \texttt{MODEL\_NAME}              & gemini-2.5-flash & SQL generation model \\[1pt]
+        \texttt{EMBEDDING\_MODEL}         & all-MiniLM-L6-v2 & 384-d dense embeddings \\[1pt]
+        \texttt{RERANKER\_MODEL}          & ms-marco-MiniLM-L-6-v2 & Cross-encoder reranker \\[1pt]
+        \texttt{RERANK\_WEIGHT}           & 0.6   & $\lambda$ in final score \\[1pt]
+        \texttt{MEMORY\_TOKEN\_BUDGET}    & 4000  & Prompt budget $B$ \\[1pt]
+        \texttt{MEMORY\_MAX\_RESULTS}     & 10    & Memories kept after ranking \\[1pt]
+        \texttt{RAG\_CANDIDATES}          & 30    & Vector candidates per search \\[1pt]
+        \texttt{RAG\_SCHEMA\_FULL\_TABLES}& 12    & Send full schema up to this size \\[1pt]
+        \texttt{RAG\_SCHEMA\_TOP\_TABLES} & 8     & Tables kept for large schemas \\[1pt]
+        \texttt{RAG\_EXAMPLES}            & 3     & Similar past questions in prompt \\[1pt]
+        \texttt{CONVERSATION\_HISTORY\_TURNS} & 6 & Recent turns considered \\[1pt]
+        \texttt{MAX\_QUERY\_ROWS}         & 100   & Row cap for reads \\[1pt]
+        \texttt{WRITE\_MAX\_ROWS}         & 50    & Row cap for one change \\[1pt]
         \texttt{ALLOW\_DATA\_CHANGES}     & True  & Disable all changes when False \\
         \bottomrule
     \end{tabular}
@@ -488,6 +517,6 @@ RAM and an NVIDIA GeForce RTX 3050 (6\,GB) laptop GPU, running Windows 11.
     \item sqlglot 25.2, qdrant-client 1.12, sentence-transformers 3.0, NumPy and pandas.
     \item google-generativeai 0.7 and a Gemini API key (\texttt{LLM\_API\_KEY}).
     \item Jinja2 and python-multipart for the web interface; htmx 2.0.3 loaded in the browser.
-    \item pytest and httpx for testing; psycopg2 for PostgreSQL targets.
-    \item Optional: Docker Compose file for a local PostgreSQL 15 target database.
+    \item pytest and httpx for testing; psycopg2 for PostgreSQL targets (a Docker Compose file
+          for a local PostgreSQL 15 target database is optional).
 \end{itemize}
