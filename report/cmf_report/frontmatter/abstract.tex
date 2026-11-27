@@ -28,7 +28,7 @@ that frames memories as untrusted data, and a deterministic \texttt{sqlglot} gua
 only one read query, or one single-table change that an admin must approve.
 
 The system is implemented with FastAPI, SQLAlchemy, Google Gemini and a server-rendered
-Jinja2/htmx interface. All 64 automated tests pass. On a 120-case synthetic benchmark, the
+Jinja2/htmx interface. All 66 automated tests pass. On a 120-case synthetic benchmark, the
 current pipeline reaches Recall@3 of 0.79 and MRR of 0.73, includes the target business
 context in 97.5\% of built prompts, and shows no cross-tenant or cross-user memory leakage.
 

@@ -21,7 +21,7 @@ re-validated before it runs.
 
 Retrieval combines dense and sparse search with reciprocal rank fusion, a weighted
 relevance score and a cross-encoder reranker, always after authorization filters, and every
-decision is recorded and shown in the Context Inspector. The evaluation showed that all 64
+decision is recorded and shown in the Context Inspector. The evaluation showed that all 66
 automated tests pass and that, on a 120-case synthetic benchmark, the current pipeline
 reaches Recall@3 of 0.79 and MRR of 0.73, includes the target context in 97.2\% of the
 checked cases, keeps definitions current in all superseding cases and leaks no memory
@@ -34,7 +34,7 @@ The following limitations of the current prototype are known and documented:
 \begin{itemize}[leftmargin=*, topsep=4pt, itemsep=3pt]
     \item \textbf{No real authentication.} Identity is the organization and user identifier
           sent with each request, \texttt{default-org}/\texttt{default-user} are created
-          automatically as owner, and the Admin/Employee choice in the web interface is a
+          automatically as owner, and the role chosen on the landing page is a
           demonstration, not a security boundary.
     \item \textbf{Credential storage.} Connection passwords are base64-encoded, not
           encrypted.

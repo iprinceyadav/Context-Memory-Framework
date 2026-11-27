@@ -154,17 +154,18 @@ error. The cost of richer context is prompt size: about 748 approximate tokens o
 against 74 for the schema-and-question baseline, which is well within the 4,000-token budget.
 
 \section{Functional Test Results}
-The complete suite was run with \texttt{pytest tests/}. All 64 collected tests passed in
-7.92 seconds (Figure~\ref{fig:chart_tests}); the eight warnings reported include the
+The complete suite was run with \texttt{pytest tests/}. All 66 collected tests passed in
+9.97 seconds (Figure~\ref{fig:chart_tests}); the eight warnings reported include the
 deprecation notice that the Gemini Python package used by the project is no
 longer maintained. Together with the benchmark, the tests confirm the guardrail behaviour that the
 benchmark does not cover: refusal of multi-statement, schema-changing, join-based and
 unbounded changes, enforcement of grants, re-validation at approval time, masking of
-sensitive columns for non-admins and read-only behaviour for Employees.
+sensitive columns for non-admins and read-only behaviour for the Employee and HR roles, and admin approval for department
+change requests.
 
 \begin{figure}[H]
     \centering
-    \figimg{0.60\textwidth}{chart_tests.png}{Collected test cases per test file; all 64 passed.}{fig:chart_tests}
+    \figimg{0.60\textwidth}{chart_tests.png}{Collected test cases per test file; all 66 passed.}{fig:chart_tests}
 \end{figure}
 
 \section{Qualitative Walkthrough}
@@ -264,7 +265,7 @@ current, and isolation holds. Several limitations of the evidence must be stated
         \toprule
         \textbf{Measure} & \textbf{Result} \\
         \midrule
-        Automated tests                         & 64 / 64 passed (7.92\,s) \\[3pt]
+        Automated tests                         & 66 / 66 passed (9.97\,s) \\[3pt]
         Recall@3 / MRR (57 retrieval cases)     & 0.79 / 0.73 \\[3pt]
         Mean memory search latency              & 66.9\,ms \\[3pt]
         Context inclusion (108 checked cases)   & 97.2\% \\[3pt]

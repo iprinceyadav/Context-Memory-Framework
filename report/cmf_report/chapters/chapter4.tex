@@ -189,27 +189,43 @@ re-plans the stored SQL, recounts, and calls \texttt{connector.write}, which rai
 affected rows. Failures are stored on the request with status \texttt{failed}.
 
 \section{Web Interface}
-The web interface has a landing page where the visitor chooses to act as an Admin (may
-request and apply changes) or an Employee (read-only; sensitive columns hidden), followed by
-the database connection page, the SQL Assistant, the Memories dashboard, the Context
-Inspector, the Knowledge page and the Evaluation page. State is held in three HTTP-only
-cookies: the acting user, the saved connection and the last conversation. htmx requests
-receive HTML fragments, and out-of-band swaps refresh the context panel, the conversation
-list and the pending-memory badge. SQLite files can be uploaded (they must start with the
-SQLite header and be at most 50\,MB) and are stored under \texttt{UPLOAD\_DIR} with a random
-suffix. Figures~\ref{fig:ui_landing}--\ref{fig:ui_knowledge} are screenshots of the running
+The web interface starts with a landing page where the visitor chooses a role (Section
+3.7.3), followed by the database connection page and the workspace pages: Ask (the chat
+assistant), Memories, Requests (administrators only), Inspector, Knowledge and Evaluation.
+Workspace pages redirect to the landing page until a role has been chosen. State is held in
+three HTTP-only cookies: the chosen role's user, the saved connection and the last
+conversation. htmx requests receive HTML fragments, and out-of-band swaps refresh the context
+panel, the conversation list and the badges that count pending memories and pending change
+requests. SQLite files can be uploaded (they must start with the SQLite header and be at most
+50\,MB) and are stored under \texttt{UPLOAD\_DIR} with a random suffix.
+Figures~\ref{fig:ui_landing}--\ref{fig:ui_requests} are screenshots of the running
 application.
 
 \begin{figure}[H]
     \centering
-    \figimg{0.48\textwidth}{ui_landing.png}{Landing page: choosing the Admin or Employee user type.}{fig:ui_landing}\hfill
+    \figimg{0.48\textwidth}{ui_landing.png}{Landing page: choosing one of the six roles.}{fig:ui_landing}\hfill
     \figimg{0.48\textwidth}{ui_connect.png}{Database connection page (by path or upload).}{fig:ui_connect}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \figimg{0.48\textwidth}{ui_chat_change.png}{SQL Assistant workspace on the retail sample database.}{fig:ui_chat_empty}\hfill
+    \figimg{0.48\textwidth}{ui_chat_finance.png}{Ask page for the Finance role; there is no Requests tab.}{fig:ui_chat_finance}\hfill
     \figimg{0.48\textwidth}{ui_knowledge.png}{Knowledge page for entering a business rule manually.}{fig:ui_knowledge}
+\end{figure}
+
+When a department role asks for a change, the chat shows the preview and states that an
+administrator must approve it. The request then appears on the administrator's Requests page
+(Figure~\ref{fig:ui_requests}) with the requesting role, the original question, the
+assignments, the rows that would change and Apply and Discard buttons. Both buttons call
+the same approval and rejection handlers as the JSON API, so the recount and row-count
+checks of Section~4.6 apply. The request in the figure was created through
+\texttt{ChangeService.propose} as the Finance user with a hand-written statement
+(\texttt{UPDATE orders SET status = 'cancelled' WHERE id = 1}), because no LLM was used
+while taking screenshots; it was not applied.
+
+\begin{figure}[H]
+    \centering
+    \figimg{0.72\textwidth}{ui_requests.png}{Administrator's Requests page with a pending change from the Finance role.}{fig:ui_requests}
 \end{figure}
 
 The JSON API is documented automatically by FastAPI (Figure~\ref{fig:ui_swagger}); the full
@@ -231,7 +247,7 @@ patched with fixed responses. The fixtures provide two organizations, users with
 roles and two database connections, which are used for isolation tests.
 
 \subsection{Test Suite}
-Table~\ref{tab:tests} summarises the suite. In total pytest collects 64 test cases in ten
+Table~\ref{tab:tests} summarises the suite. In total pytest collects 66 test cases in ten
 files.
 
 \begin{table}[H]
@@ -243,7 +259,7 @@ files.
         \toprule
         \textbf{File} & \textbf{Tests} & \textbf{What is verified} \\
         \midrule
-        \texttt{test\_pages.py}           & 19 & All pages render; upload accepts SQLite and rejects other files; chat renders answer and context; memory approval; change-request flow; first visit asks for user type; Employee is read-only. \\[3pt]
+        \texttt{test\_pages.py}           & 21 & All pages render; upload accepts SQLite and rejects other files; chat renders answer and context; memory approval; change-request flow; first visit asks for a role; Employee is read-only; a department change needs admin approval; read-only departments cannot request changes. \\[3pt]
         \texttt{test\_changes.py}         & 12 & Planner classification; permission refusal; grant per table and action; approval required; rejected requests change nothing; approval stops if data changed; revoked grants; unsafe and oversized changes; masking and row cap; inserts and deletes. \\[3pt]
         \texttt{test\_memory\_store.py}   &  6 & Pending default; cross-org denial; versioning; approve/reject/delete; supersede; listing and statistics. \\[3pt]
         \texttt{test\_rag\_pipeline.py}   &  6 & Follow-up detection and rewritten retrieval; vector table search for large schemas; examples indexed and not shared between users; stale index rebuilt at start-up. \\[3pt]
