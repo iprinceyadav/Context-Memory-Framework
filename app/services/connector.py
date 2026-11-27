@@ -6,6 +6,15 @@ from app.models.database_schema import DatabaseSchema
 from app.services.encryption import decrypt
 import hashlib
 import json
+
+
+class RowCountMismatch(Exception):
+    def __init__(self, expected: int, changed: int):
+        super().__init__(f"Expected to change {expected} row(s) but the statement touched {changed}; rolled back.")
+        self.expected = expected
+        self.changed = changed
+
+
 class DatabaseConnector:
     def __init__(self):
         self._engines: dict[str, Engine] = {}
@@ -31,22 +40,37 @@ class DatabaseConnector:
         except Exception as e:
             raise Exception(f"Connection failed: {str(e)}")
 
-    def execute(self, db_type: str, username: str, password: str, host: str, port: int, db_name: str, query: str) -> list[dict]:
-        try:
-            url = self.connection_url(db_type, username, password, host, port, db_name)
-            engine = create_engine(url, connect_args={"connect_timeout": 5} if db_type == "postgresql" else {})
+    def open_engine(self, db_type: str, username: str, password: str, host: str, port: int, db_name: str) -> Engine:
+        url = self.connection_url(db_type, username, password, host, port, db_name)
+        return create_engine(url, connect_args={"connect_timeout": 5} if db_type == "postgresql" else {})
 
-            with engine.connect() as conn:
+    def read(self, engine: Engine, query: str, max_rows: int) -> tuple[list[dict], bool]:
+        with engine.connect() as conn:
+            transaction = conn.begin()
+            try:
                 result = conn.execute(text(query))
+                if not result.returns_rows:
+                    return [], False
+                columns = list(result.keys())
+                fetched = result.fetchmany(max_rows + 1)
+                rows = [dict(zip(columns, row)) for row in fetched[:max_rows]]
+                return rows, len(fetched) > max_rows
+            finally:
+                transaction.rollback()
 
-                if result.returns_rows:
-                    columns = result.keys()
-                    return [dict(zip(columns, row)) for row in result.fetchall()]
-                else:
-                    conn.commit()
-                    return [{"status": "success", "message": "Query executed successfully, no rows returned."}]
-        except Exception as e:
-            raise Exception(f"Query execution failed: {str(e)}")
+    def count(self, engine: Engine, query: str) -> int:
+        rows, _ = self.read(engine, query, 1)
+        if not rows:
+            return 0
+        return int(next(iter(rows[0].values())) or 0)
+
+    def write(self, engine: Engine, query: str, expected_rows: int) -> int:
+        with engine.begin() as conn:
+            result = conn.execute(text(query))
+            changed = result.rowcount
+            if changed not in (-1, expected_rows):
+                raise RowCountMismatch(expected_rows, changed)
+            return expected_rows if changed == -1 else changed
 
     def fingerprint(self, db_type: str, username: str, host: str, port: int, db_name: str) -> str:
         identity = f"{db_type}://{username}@{host}:{port}/{db_name}"
@@ -104,6 +128,11 @@ class DatabaseConnector:
         engine = create_engine(url)
         self._engines[record.id] = engine
         return engine
+
+    def forget(self, connection_id: str) -> None:
+        engine = self._engines.pop(connection_id, None)
+        if engine is not None:
+            engine.dispose()
 
     def session_for(self, record: DatabaseConnection) -> Session:
         engine = self.engine_for(record)
