@@ -1,9 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
-    // --- Default tenant/user context (matches backend auth fallback) ---
     const ORG_ID = "default-org";
     const USER_ID = "default-user";
 
-    // --- DOM Elements ---
     const viewLanding = document.getElementById("view-landing");
     const viewConnect = document.getElementById("view-connect");
     const viewWorkspace = document.getElementById("view-workspace");
@@ -32,7 +30,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const contextPanelWrapper = document.getElementById("context-panel-wrapper");
     const btnCloseContext = document.getElementById("btn-close-context");
 
-    // Memory & Tabs elements
     const navTabs = document.querySelectorAll(".nav-tab");
     const workspaceTabs = document.querySelectorAll(".workspace-tab");
     const pendingBanner = document.getElementById("pending-memory-banner");
@@ -46,7 +43,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const detailModal = document.getElementById("memory-detail-modal");
     const btnCloseDetailModal = document.getElementById("btn-close-detail-modal");
 
-    // --- State ---
     let currentDbType = "postgresql";
     let isConnected = false;
     let currentConversationId = null;
@@ -54,7 +50,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastSqlQuery = "";
     let lastContextDebug = null;
 
-    // --- Navigation & View Logic ---
     function showView(viewElement) {
         document.querySelectorAll(".view-section").forEach(v => {
             v.classList.remove("active");
@@ -140,7 +135,6 @@ document.addEventListener("DOMContentLoaded", () => {
         btnCloseDetailModal.addEventListener("click", () => detailModal.classList.add("hidden"));
     }
 
-    // Handle DB Type Selection
     dbOptions.forEach(option => {
         option.addEventListener("click", () => {
             const dbType = option.getAttribute("data-db");
@@ -194,7 +188,6 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
-    // --- API Interactions (Connection) ---
     connectionForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         showConnectStep(step3);
@@ -279,7 +272,6 @@ document.addEventListener("DOMContentLoaded", () => {
         showView(viewLanding);
     });
 
-    // --- Workspace Chat Logic (Context-Aware /api/chat/ask) ---
     queryInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -358,7 +350,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateSchemaTreeMock(tables);
                 loadConversations();
 
-                // Check for background-extracted pending memories shortly after response
                 setTimeout(checkPendingMemoriesBanner, 1200);
             } else {
                 if (loadingMsg) {
@@ -458,7 +449,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return tableHTML;
     }
 
-    // --- Context Panel Logic ---
     btnCloseContext.addEventListener("click", () => {
         contextPanelWrapper.classList.add("collapsed");
     });
@@ -544,7 +534,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return formatted;
     }
 
-    // --- Conversations Sidebar ---
     async function loadConversations() {
         const listEl = document.getElementById("conversations-list");
         try {
@@ -589,7 +578,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (_) {}
     }
 
-    // --- Memory Dashboard Logic ---
     async function refreshMemoryStats() {
         try {
             const res = await fetch(`/api/memories/statistics?organization_id=${ORG_ID}&user_id=${USER_ID}`);
@@ -787,7 +775,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (memoryFilterType) memoryFilterType.addEventListener("change", loadMemoriesDashboard);
     if (memoryFilterStatus) memoryFilterStatus.addEventListener("change", loadMemoriesDashboard);
 
-    // --- Context Inspector ---
     function renderContextInspector(debugInfo) {
         const container = document.getElementById("inspector-body");
         if (!debugInfo) {
@@ -845,7 +832,6 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
-    // --- Business Knowledge Manager ---
     if (knowledgeForm) {
         knowledgeForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -889,7 +875,6 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/"/g, "&quot;");
     }
 
-    // --- Evaluation Benchmark Dashboard ---
     const btnRefreshEvaluation = document.getElementById("btn-refresh-evaluation");
     const btnRunEvaluation = document.getElementById("btn-run-evaluation");
 
