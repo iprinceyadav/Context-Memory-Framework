@@ -4,10 +4,27 @@
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/chat/ask` | Context-aware NL2SQL chat (retrieves memories, validates SQL, executes, logs QueryMemory, extracts candidate memories in background) |
+| `POST` | `/api/chat/ask` | Context-aware chat. Reads are answered (`outcome: answer`, `truncated`, `hidden_columns`); change requests return `outcome: change_requested` with `change_request`, or `not_allowed` / `no_match` with the reason |
 | `GET` | `/api/chat/conversations` | List conversations for `organization_id` & `user_id` |
 | `POST` | `/api/chat/conversations` | Create a new conversation |
 | `GET` | `/api/chat/conversations/{conversation_id}/messages` | Get message history for a conversation |
+
+## Team, Permissions & Approvals
+
+All take `organization_id` and `user_id` query parameters. Admin means role `owner` or `admin`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/team/members` | List members of the organization |
+| `POST` | `/api/team/members` | Add a member (admin) |
+| `PATCH` | `/api/team/members/{member_id}` | Change a member's role (admin) |
+| `GET` | `/api/team/grants` | Active permissions (admins see all, others their own) |
+| `POST` | `/api/team/grants` | Allow a member to request `update` / `insert` / `delete` on a table or `*` (admin) |
+| `DELETE` | `/api/team/grants/{grant_id}` | Revoke a permission (admin) |
+| `GET` | `/api/changes` | Change requests (admins see all, others their own); `status` filter |
+| `GET` | `/api/changes/{request_id}` | One change request |
+| `POST` | `/api/changes/{request_id}/approve` | Re-check and apply a pending change (admin) |
+| `POST` | `/api/changes/{request_id}/reject` | Reject a pending change with an optional `note` (admin) |
 
 ## Memory Management & Lifecycle
 
@@ -34,5 +51,5 @@
 
 ## Preserved Legacy Endpoints
 
-- `/api/health`, `/api/organizations/`, `/api/users/`, `/api/databases/*` (including `/api/databases/ask`) remain unchanged and backward-compatible.
+- `/api/health`, `/api/organizations/`, `/api/users/`, `/api/databases/*` remain. `/api/databases/query-direct` and `/api/databases/ask` are now read-only and mask sensitive columns; `/api/databases/connect` reuses an existing saved connection for the same database.
 
