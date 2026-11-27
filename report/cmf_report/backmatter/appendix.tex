@@ -9,7 +9,9 @@ Table~\ref{tab:full_config} lists every setting defined in \texttt{app/core/conf
 with its default value. Settings marked $^\dagger$ are defined but not read by the current
 code.
 
-\begin{longtable}{p{6.2cm} p{6.8cm}}
+\begingroup
+\small
+\begin{longtable}{p{7.2cm} p{7.6cm}}
     \caption{Complete Configuration Settings and Defaults}
     \label{tab:full_config} \\
     \toprule
@@ -60,6 +62,7 @@ code.
     \texttt{RAG\_REWRITE\_QUERY}            & True \\
     \bottomrule
 \end{longtable}
+\endgroup
 
 \section{API Endpoints}
 \label{app:api}
@@ -68,9 +71,9 @@ All JSON endpoints are served under \texttt{/api}. Most take \texttt{organizatio
 ``admin'' means role \texttt{owner} or \texttt{admin}.
 
 \begingroup
-\small
-\renewcommand{\arraystretch}{0.85}
-\begin{longtable}{p{1.4cm} p{5.6cm} p{6.0cm}}
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{longtable}{p{1.2cm} p{7.4cm} p{6.4cm}}
     \caption{JSON API Endpoints}
     \label{tab:api} \\
     \toprule
@@ -130,8 +133,9 @@ and Figure~\ref{fig:chart_sampledbs} compares their sizes.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Sample Databases (Counted from the Files)}
-    \begin{tabular}{p{3.3cm} p{1.1cm} p{1.4cm} p{0.8cm} p{6.0cm}}
+    \begin{tabular}{p{4.3cm} p{1.1cm} p{1.4cm} p{0.8cm} p{6.6cm}}
         \toprule
         \textbf{File} & \textbf{Tables} & \textbf{Rows} & \textbf{FKs} & \textbf{Largest tables} \\
         \midrule
@@ -152,6 +156,7 @@ and Figure~\ref{fig:chart_sampledbs} compares their sizes.
 
 \section{Running the System}
 \label{app:run}
+\noindent\begin{minipage}{\linewidth}
 \begin{lstlisting}[language=bash, caption={Installation, start-up, tests and benchmark}, label={lst:run}]
 copy .env.example .env          # then set LLM_API_KEY
 pip install -r requirements.txt
@@ -159,6 +164,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 pytest -v tests/
 python tests/run_evaluation.py  # writes tests/evaluation_results.json
 \end{lstlisting}
+\end{minipage}
 After start-up, the web interface is available at \texttt{http://127.0.0.1:8000} and the
 interactive API documentation at \texttt{/docs}. A sample database can be connected on the
 Connect Database screen by uploading the file or by typing its path, for example

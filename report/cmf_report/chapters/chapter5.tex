@@ -36,6 +36,7 @@ the same store, so later cases are retrieved against a growing set of distractor
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Composition of the 120-Case Benchmark}
     \begin{tabular}{p{4.6cm} p{0.9cm} p{7.9cm}}
         \toprule
@@ -86,6 +87,7 @@ the re-run on the current pipeline.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Retrieval Metrics on the 57 Retrieval Cases}
     \begin{tabular}{p{5.2cm} p{3.6cm} p{3.6cm}}
         \toprule
@@ -118,6 +120,7 @@ context-level results.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Context-Inclusion, Update and Isolation Results}
     \begin{tabular}{p{6.4cm} p{3.0cm} p{3.0cm}}
         \toprule
@@ -153,8 +156,8 @@ against 74 for the schema-and-question baseline, which is well within the 4,000-
 \section{Functional Test Results}
 The complete suite was run with \texttt{pytest tests/}. All 64 collected tests passed in
 7.92 seconds (Figure~\ref{fig:chart_tests}); the eight warnings reported include the
-deprecation notice that the \texttt{google-generativeai} package is no longer
-maintained. Together with the benchmark, the tests confirm the guardrail behaviour that the
+deprecation notice that the Gemini Python package used by the project is no
+longer maintained. Together with the benchmark, the tests confirm the guardrail behaviour that the
 benchmark does not cover: refusal of multi-statement, schema-changing, join-based and
 unbounded changes, enforcement of grants, re-validation at approval time, masking of
 sensitive columns for non-admins and read-only behaviour for Employees.
@@ -194,6 +197,7 @@ not.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Scores Returned for the Query ``monthly revenue by region''}
     \begin{tabular}{p{4.8cm} p{0.9cm} p{0.9cm} p{0.9cm} p{0.9cm} p{0.9cm} p{1.4cm}}
         \toprule
@@ -254,6 +258,7 @@ current, and isolation holds. Several limitations of the evidence must be stated
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Summary of Measured Results (Current Pipeline)}
     \begin{tabular}{p{7.0cm} p{5.8cm}}
         \toprule

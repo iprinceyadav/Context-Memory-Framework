@@ -106,13 +106,13 @@ A question sent to \texttt{POST /api/chat/ask} passes through the following step
         \node[diamond, draw, aspect=2.2, below=of d, fill=gray!10, inner sep=1pt] (e) {6. \texttt{plan\_sql}};
         \node[blk=3.6cm, below left=0.5cm and 0.2cm of e] (f) {7a. Read: rolled-back\\transaction, cap, mask};
         \node[blk=3.6cm, below right=0.5cm and 0.2cm of e] (g) {7b. Change: permission,\\preview, pending request};
-        \node[blk=3.0cm, right=0.6cm of e] (x) {Refuse with reason\\(\texttt{not\_allowed})};
+        \node[blk=3.0cm, right=1.4cm of e] (x) {Refuse with reason\\(\texttt{not\_allowed})};
         \node[blk=3.6cm, below=of f, fill=red!8] (h) {LLM answer + insights};
         \node[blk=3.6cm, below=of h] (i) {8. Save message,\\QueryMemory, example};
         \node[blk=3.6cm, below=of i, fill=green!8] (j) {9. Background memory\\extraction (pending)};
         \draw[arr] (a) -- (b); \draw[arr] (b) -- (c); \draw[arr] (c) -- (d); \draw[arr] (d) -- (e);
         \draw[arr] (e) -| node[lbl, above left]{read} (f);
-        \draw[arr] (e) -| node[lbl, above right]{change} (g);
+        \draw[arr] (e) -| node[lbl, below left, pos=0.9]{change} (g);
         \draw[arr] (e) -- node[lbl, above]{invalid} (x);
         \draw[arr] (f) -- (h); \draw[arr] (h) -- (i); \draw[arr] (i) -- (j);
     \end{tikzpicture}
@@ -126,8 +126,9 @@ responsibilities, with line counts measured on the final source tree.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Modular Component Breakdown of the System}
-    \begin{tabular}{p{5.0cm} p{1.0cm} p{7.4cm}}
+    \begin{tabular}{p{6.5cm} p{0.9cm} p{7.4cm}}
         \toprule
         \textbf{Module} & \textbf{Lines} & \textbf{Responsibility} \\
         \midrule
@@ -160,6 +161,7 @@ Table~\ref{tab:platform_tables}.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Tables of the Platform Database}
     \begin{tabular}{p{4.6cm} p{10.6cm}}
         \toprule
@@ -185,22 +187,22 @@ Table~\ref{tab:platform_tables}.
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[every node/.style={font=\small}]
-        \tikzset{er/.style={blk=2.7cm, minimum height=0.8cm}}
+        \tikzset{er/.style={blk=2.9cm, minimum height=0.8cm, font=\footnotesize}}
         \node[er] (org)  at (0,0)       {organizations};
         \node[er] (usr)  at (3.6,0)     {users};
-        \node[er] (dbc)  at (7.2,0)     {database\_connections};
-        \node[er] (ds)   at (10.8,0)    {database\_schemas};
+        \node[er] (dbc)  at (7.6,0)     {database\_connections};
+        \node[er] (ds)   at (11.6,0)    {database\_schemas};
         \node[er] (mem)  at (0,-1.8)    {memories};
         \node[er] (conv) at (3.6,-1.8)  {conversations};
-        \node[er] (cr)   at (7.2,-1.8)  {change\_requests};
-        \node[er] (ag)   at (10.8,-1.8) {access\_grants};
+        \node[er] (cr)   at (7.6,-1.8)  {change\_requests};
+        \node[er] (ag)   at (11.6,-1.8) {access\_grants};
         \node[er] (ver)  at (0,-3.4)    {memory\_versions};
         \node[er] (msg)  at (3.6,-3.4)  {messages};
-        \node[er] (qm)   at (7.2,-3.4)  {query\_memories};
+        \node[er] (qm)   at (7.6,-3.4)  {query\_memories};
         \node[er] (aud)  at (0,-5.0)    {memory\_audit\_logs};
         \draw[arr] (usr) -- (org);
         \draw[arr] (dbc.north) -- ++(0,0.45) -| (org.north);
-        \draw[arr, dashed] (ds) -- node[lbl, above]{fingerprint} (dbc);
+        \draw[arr, dashed] (ds) -- node[lbl, below]{hash} (dbc);
         \draw[arr] (mem) -- (usr);
         \draw[arr] (conv) -- (usr);
         \draw[arr] (cr) -- (dbc);
@@ -226,8 +228,9 @@ structured query record (Table~\ref{tab:memory_types}).
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Memory Categories in CMF}
-    \begin{tabular}{p{2.4cm} p{4.6cm} p{6.4cm}}
+    \begin{tabular}{p{2.0cm} p{6.0cm} p{7.2cm}}
         \toprule
         \textbf{Category} & \textbf{Stored as} & \textbf{Example} \\
         \midrule
@@ -260,7 +263,7 @@ marks it \textit{deleted} and clears its embedding. Every content edit writes a 
 
 \begin{figure}[H]
     \centering
-    \begin{tikzpicture}[node distance=0.9cm and 1.4cm, every node/.style={font=\small}]
+    \begin{tikzpicture}[node distance=0.9cm and 1.9cm, every node/.style={font=\small}]
         \node[st] (p) {pending};
         \node[st, right=of p, fill=blue!10] (a) {approved};
         \node[st, below=of p, fill=red!8] (r) {rejected};
@@ -342,9 +345,9 @@ function and combined with the first-stage score:
 \begin{equation}
     \text{final}(q,m) = \lambda\, r(q,m) + (1-\lambda)\, S(q,m), \qquad \lambda = 0.6
 \end{equation}
-If the reranker cannot be loaded, the first-stage score is used unchanged. The top
-$k$ (\texttt{MEMORY\_MAX\_RESULTS}, default 10) are kept; the rest are recorded as
-\texttt{below\_top\_k\_cutoff}.
+If the reranker cannot be loaded, the first-stage score is used unchanged. The top $k$
+memories are kept, where $k$ is set by \texttt{MEMORY\_MAX\_RESULTS} (default 10). The
+remaining candidates are recorded with the exclusion reason \texttt{below\_top\_k\_cutoff}.
 
 \section{Context Engineering Design}
 
@@ -445,8 +448,9 @@ Table~\ref{tab:config}; the complete list is in Appendix~\ref{app:config}.
 
 \begin{table}[H]
     \centering
+    \small
     \caption{Key System Configuration Parameters (Defaults)}
-    \begin{tabular}{p{5.2cm} p{3.2cm} p{5.0cm}}
+    \begin{tabular}{p{6.4cm} p{4.2cm} p{4.6cm}}
         \toprule
         \textbf{Parameter} & \textbf{Default} & \textbf{Role} \\
         \midrule
