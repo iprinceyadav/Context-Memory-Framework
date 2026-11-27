@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
     const ORG_ID = "default-org";
-    const USER_ID = "default-user";
+    const DEFAULT_USER_ID = "default-user";
+    let currentUserId = DEFAULT_USER_ID;
+    let currentUser = null;
+    let members = [];
 
     const viewLanding = document.getElementById("view-landing");
     const viewConnect = document.getElementById("view-connect");
@@ -81,7 +84,21 @@ document.addEventListener("DOMContentLoaded", () => {
             renderContextInspector(lastContextDebug);
         } else if (tabName === "evaluation") {
             loadEvaluationDashboard();
+        } else if (tabName === "approvals") {
+            loadChanges();
+        } else if (tabName === "team") {
+            loadTeam();
         }
+    }
+
+    function enterWorkspace() {
+        showView(viewWorkspace);
+        loadMembers().then(() => {
+            loadConversations();
+            refreshMemoryStats();
+            refreshApprovalsBadge();
+        });
+        queryInput.focus();
     }
 
     navTabs.forEach(tab => {
@@ -96,12 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnBackLanding.addEventListener("click", () => showView(viewLanding));
     btnChangeDb.addEventListener("click", () => showConnectStep(step1));
 
-    btnDemo.addEventListener("click", () => {
-        showView(viewWorkspace);
-        loadConversations();
-        refreshMemoryStats();
-        queryInput.focus();
-    });
+    btnDemo.addEventListener("click", enterWorkspace);
 
     btnNewChat.addEventListener("click", () => {
         currentConversationId = null;
@@ -188,6 +200,21 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
+    async function saveConnection(payload) {
+        try {
+            const res = await fetch("/api/databases/connect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...payload, name: payload.database_name, organization_id: ORG_ID }),
+            });
+            if (!res.ok) return null;
+            const saved = await res.json();
+            return saved.id;
+        } catch (_) {
+            return null;
+        }
+    }
+
     connectionForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         showConnectStep(step3);
@@ -207,16 +234,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (response.ok) {
                 document.getElementById("sync-s3").classList.add("done");
                 document.getElementById("sync-status-text").textContent = "Context ready!";
+                currentConnectionId = await saveConnection(payload);
 
                 setTimeout(() => {
                     isConnected = true;
                     document.getElementById("workspace-db-name").textContent = payload.database_name;
                     document.getElementById("workspace-db-badge").textContent =
                         payload.db_type === "postgresql" ? "PG" : payload.db_type === "mysql" ? "MY" : "SQ";
-                    showView(viewWorkspace);
-                    loadConversations();
-                    refreshMemoryStats();
-                    queryInput.focus();
+                    enterWorkspace();
 
                     ["sync-s1", "sync-s2", "sync-s3"].forEach(id =>
                         document.getElementById(id).classList.remove("done")
@@ -266,6 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnDisconnect.addEventListener("click", () => {
         isConnected = false;
         currentConversationId = null;
+        currentConnectionId = null;
         chatHistory.innerHTML = "";
         workspaceEmpty.style.display = "flex";
         contextPanelWrapper.classList.add("collapsed");
@@ -309,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
             conversation_id: currentConversationId,
             connection_id: currentConnectionId,
             organization_id: ORG_ID,
-            user_id: USER_ID,
+            user_id: currentUserId,
         };
 
         try {
@@ -327,19 +353,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 lastSqlQuery = result.sql_query || "";
                 lastContextDebug = result.context_debug || null;
 
-                const contextUsedHtml = renderContextUsedCollapsible(result.context_used);
-                const nlHtml = `<div class="nl-answer">${escapeHtml(result.natural_response || "")}</div>`;
-                const tableHtml = renderTable(result.data);
-
                 if (loadingMsg) {
-                    loadingMsg.querySelector(".msg-content").innerHTML = `
-                        <div class="msg-label">Assistant Answer</div>
-                        ${nlHtml}
-                        ${contextUsedHtml}
-                        ${tableHtml}
-                    `;
+                    const content = loadingMsg.querySelector(".msg-content");
+                    content.innerHTML = renderAssistantReply(result);
                     attachCollapsibleListeners(loadingMsg);
+                    bindChangeActions(content);
                 }
+                if (result.outcome === "change_requested") refreshApprovalsBadge();
 
                 const tables = (result.context_used && result.context_used.schema_tables && result.context_used.schema_tables.length)
                     ? extractTablesFromSQL(result.sql_query)
@@ -537,7 +557,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadConversations() {
         const listEl = document.getElementById("conversations-list");
         try {
-            const res = await fetch(`/api/chat/conversations?organization_id=${ORG_ID}&user_id=${USER_ID}`);
+            const res = await fetch(`/api/chat/conversations?organization_id=${ORG_ID}&user_id=${currentUserId}`);
             if (!res.ok) return;
             const convs = await res.json();
             if (!convs.length) {
@@ -559,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
         currentConversationId = convId;
         switchWorkspaceTab("chat");
         try {
-            const res = await fetch(`/api/chat/conversations/${convId}/messages?organization_id=${ORG_ID}&user_id=${USER_ID}`);
+            const res = await fetch(`/api/chat/conversations/${convId}/messages?organization_id=${ORG_ID}&user_id=${currentUserId}`);
             if (!res.ok) return;
             const msgs = await res.json();
             chatHistory.innerHTML = "";
@@ -580,7 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function refreshMemoryStats() {
         try {
-            const res = await fetch(`/api/memories/statistics?organization_id=${ORG_ID}&user_id=${USER_ID}`);
+            const res = await fetch(`/api/memories/statistics?organization_id=${ORG_ID}&user_id=${currentUserId}`);
             if (!res.ok) return;
             const stats = await res.json();
             document.getElementById("stat-total").textContent = stats.total;
@@ -613,7 +633,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const listEl = document.getElementById("memory-list");
         const mType = memoryFilterType.value;
         const mStatus = memoryFilterStatus.value;
-        let url = `/api/memories/?organization_id=${ORG_ID}&user_id=${USER_ID}&limit=100`;
+        let url = `/api/memories/?organization_id=${ORG_ID}&user_id=${currentUserId}&limit=100`;
         if (mType) url += `&memory_type=${encodeURIComponent(mType)}`;
         if (mStatus) url += `&status=${encodeURIComponent(mStatus)}`;
 
@@ -636,7 +656,7 @@ document.addEventListener("DOMContentLoaded", () => {
             body: JSON.stringify({
                 query: q,
                 organization_id: ORG_ID,
-                user_id: USER_ID,
+                user_id: currentUserId,
                 memory_types: memoryFilterType.value ? [memoryFilterType.value] : null,
                 include_superseded: true,
                 only_approved: false,
@@ -694,23 +714,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function actOnMemory(id, action) {
-        await fetch(`/api/memories/${id}/${action}?organization_id=${ORG_ID}&user_id=${USER_ID}`, { method: "POST" });
+        await fetch(`/api/memories/${id}/${action}?organization_id=${ORG_ID}&user_id=${currentUserId}`, { method: "POST" });
         loadMemoriesDashboard();
     }
 
     async function deleteMemory(id) {
         if (!confirm("Delete this memory and clear its derived embedding?")) return;
-        await fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${USER_ID}`, { method: "DELETE" });
+        await fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${currentUserId}`, { method: "DELETE" });
         loadMemoriesDashboard();
     }
 
     async function editMemoryPrompt(id) {
-        const res = await fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${USER_ID}`);
+        const res = await fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${currentUserId}`);
         if (!res.ok) return;
         const mem = await res.json();
         const updated = prompt("Edit memory content (a new version will be preserved):", mem.content);
         if (updated && updated.trim() && updated.trim() !== mem.content) {
-            await fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${USER_ID}`, {
+            await fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${currentUserId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content: updated.trim(), change_reason: "Edited from Memory Dashboard" }),
@@ -721,9 +741,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function openMemoryDetail(id) {
         const [memRes, verRes, audRes] = await Promise.all([
-            fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${USER_ID}`),
-            fetch(`/api/memories/${id}/versions?organization_id=${ORG_ID}&user_id=${USER_ID}`),
-            fetch(`/api/memories/${id}/audit?organization_id=${ORG_ID}&user_id=${USER_ID}`),
+            fetch(`/api/memories/${id}?organization_id=${ORG_ID}&user_id=${currentUserId}`),
+            fetch(`/api/memories/${id}/versions?organization_id=${ORG_ID}&user_id=${currentUserId}`),
+            fetch(`/api/memories/${id}/audit?organization_id=${ORG_ID}&user_id=${currentUserId}`),
         ]);
         if (!memRes.ok) return;
         const mem = await memRes.json();
@@ -847,7 +867,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 auto_approve: document.getElementById("bk-auto-approve").checked,
             };
 
-            const res = await fetch(`/api/memories/?organization_id=${ORG_ID}&user_id=${USER_ID}`, {
+            const res = await fetch(`/api/memories/?organization_id=${ORG_ID}&user_id=${currentUserId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -866,6 +886,329 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+
+    const ROLE_LABELS = { owner: "Owner", admin: "Admin", analyst: "Analyst", viewer: "Employee" };
+    const ACTION_LABELS = { update: "Update", insert: "Add", delete: "Delete" };
+    const STATUS_LABELS = { pending: "Waiting for approval", executed: "Applied", rejected: "Rejected", failed: "Failed" };
+    const actingUserSelect = document.getElementById("acting-user");
+    const changeFilter = document.getElementById("change-filter");
+    const memberForm = document.getElementById("member-form");
+
+    function isAdminUser() {
+        return Boolean(currentUser && (currentUser.role === "owner" || currentUser.role === "admin"));
+    }
+
+    function userQuery() {
+        return `organization_id=${encodeURIComponent(ORG_ID)}&user_id=${encodeURIComponent(currentUserId)}`;
+    }
+
+    function errorText(body) {
+        if (body && Array.isArray(body.detail)) return body.detail.map(d => d.msg).join("; ");
+        return (body && body.detail) || "Something went wrong.";
+    }
+
+    function storedUserId() {
+        try {
+            return localStorage.getItem("cmf_acting_user");
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function rememberUserId(id) {
+        try {
+            localStorage.setItem("cmf_acting_user", id);
+        } catch (_) {}
+    }
+
+    async function loadMembers() {
+        try {
+            const res = await fetch(`/api/team/members?organization_id=${ORG_ID}&user_id=${DEFAULT_USER_ID}`);
+            if (!res.ok) return;
+            members = await res.json();
+        } catch (_) {
+            return;
+        }
+        const preferred = storedUserId();
+        if (preferred && members.some(m => m.id === preferred)) currentUserId = preferred;
+        if (!members.some(m => m.id === currentUserId) && members.length) currentUserId = members[0].id;
+        actingUserSelect.innerHTML = members
+            .map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.full_name)}</option>`)
+            .join("");
+        actingUserSelect.value = currentUserId;
+        applyIdentity();
+    }
+
+    function applyIdentity() {
+        currentUser = members.find(m => m.id === currentUserId) || null;
+        document.getElementById("acting-role").textContent =
+            currentUser ? (ROLE_LABELS[currentUser.role] || currentUser.role) : "";
+        document.querySelectorAll(".admin-only").forEach(el => el.classList.toggle("hidden", !isAdminUser()));
+        document.getElementById("approvals-subtitle").textContent = isAdminUser()
+            ? "Changes your team asked for in chat. Nothing changes until you approve."
+            : "Changes you asked for in chat. An admin approves them before anything changes.";
+    }
+
+    actingUserSelect.addEventListener("change", () => {
+        currentUserId = actingUserSelect.value;
+        rememberUserId(currentUserId);
+        applyIdentity();
+        currentConversationId = null;
+        chatHistory.innerHTML = "";
+        workspaceEmpty.style.display = "flex";
+        const activeTab = document.querySelector(".nav-tab.active");
+        const tab = activeTab ? activeTab.dataset.tab : "chat";
+        switchWorkspaceTab(tab === "team" && !isAdminUser() ? "chat" : tab);
+        loadConversations();
+        refreshMemoryStats();
+        refreshApprovalsBadge();
+    });
+
+    function renderAssistantReply(result) {
+        const answer = `<div class="nl-answer">${escapeHtml(result.natural_response || "")}</div>`;
+        if (result.outcome === "change_requested" && result.change_request) {
+            return `<div class="msg-label">Change request</div>${answer}${renderChangeCard(result.change_request)}`;
+        }
+        if (result.outcome === "not_allowed" || result.outcome === "no_match") {
+            const label = result.outcome === "no_match" ? "Nothing to change" : "Not allowed";
+            return `<div class="msg-label">${label}</div><div class="notice-msg">${escapeHtml(result.natural_response || "")}</div>`;
+        }
+        const notes = [];
+        if (result.truncated) notes.push(`Showing the first ${(result.data || []).length} rows only.`);
+        if (result.hidden_columns && result.hidden_columns.length) {
+            notes.push(`Hidden for privacy: ${result.hidden_columns.join(", ")}.`);
+        }
+        const noteHtml = notes.length ? `<div class="result-note">${escapeHtml(notes.join(" "))}</div>` : "";
+        return `
+            <div class="msg-label">Answer</div>
+            ${answer}
+            ${renderContextUsedCollapsible(result.context_used)}
+            ${renderTable(result.data)}
+            ${noteHtml}
+        `;
+    }
+
+    function renderChangeCard(cr) {
+        const preview = cr.preview || {};
+        const changes = (preview.changes || [])
+            .map(c => `<li><span class="mono">${escapeHtml(c.column)}</span> → <span class="mono">${escapeHtml(c.value)}</span></li>`)
+            .join("");
+        const current = preview.rows && preview.rows.length
+            ? `<div class="block-label">Rows that will change (current values)</div>${renderTable(preview.rows)}`
+            : "";
+        const added = preview.new_rows && preview.new_rows.length
+            ? `<div class="block-label">New rows</div>${renderTable(preview.new_rows)}`
+            : "";
+        const status = STATUS_LABELS[cr.status] || cr.status;
+        const meta = [
+            cr.requester ? `Asked by ${escapeHtml(cr.requester)}` : "",
+            cr.reviewer ? `${escapeHtml(status)} by ${escapeHtml(cr.reviewer)}` : "",
+        ].filter(Boolean).join(" · ");
+        const actions = cr.status === "pending" && isAdminUser()
+            ? `<div class="memory-actions">
+                   <button class="btn-approve" data-change="${escapeHtml(cr.id)}" data-decision="approve">Approve</button>
+                   <button class="btn-reject" data-change="${escapeHtml(cr.id)}" data-decision="reject">Reject</button>
+               </div>`
+            : "";
+        return `<div class="change-card" data-id="${escapeHtml(cr.id)}">
+                <div class="memory-card-header">
+                    <div class="memory-badges">
+                        <span class="badge badge-action-${escapeHtml(cr.action)}">${escapeHtml(ACTION_LABELS[cr.action] || cr.action)}</span>
+                        <strong class="change-title">${escapeHtml(cr.summary)}</strong>
+                    </div>
+                    <span class="badge badge-status-${escapeHtml(cr.status)}">${escapeHtml(status)}</span>
+                </div>
+                <div class="change-question">“${escapeHtml(cr.question)}”</div>
+                ${meta ? `<div class="change-meta">${meta}</div>` : ""}
+                ${changes ? `<ul class="change-list">${changes}</ul>` : ""}
+                ${current}
+                ${added}
+                ${cr.review_note ? `<div class="change-meta">Note: ${escapeHtml(cr.review_note)}</div>` : ""}
+                ${cr.error ? `<div class="error-msg">${escapeHtml(cr.error)}</div>` : ""}
+                <details class="change-sql"><summary>Statement</summary><pre><code>${syntaxHighlightSQL(cr.sql)}</code></pre></details>
+                ${actions}
+            </div>`;
+    }
+
+    function bindChangeActions(container) {
+        container.querySelectorAll("[data-change]").forEach(btn => {
+            btn.addEventListener("click", () => reviewChange(btn.dataset.change, btn.dataset.decision, btn.closest(".change-card")));
+        });
+    }
+
+    async function reviewChange(id, decision, card) {
+        let note = null;
+        if (decision === "reject") {
+            note = prompt("Reason for rejecting (optional):");
+            if (note === null) return;
+        } else if (!confirm("Apply this change to the database now?")) {
+            return;
+        }
+        const buttons = card.querySelectorAll("[data-change]");
+        buttons.forEach(b => (b.disabled = true));
+        try {
+            const res = await fetch(`/api/changes/${encodeURIComponent(id)}/${decision}?${userQuery()}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ note }),
+            });
+            const body = await res.json();
+            if (!res.ok) {
+                alert(errorText(body));
+                buttons.forEach(b => (b.disabled = false));
+                return;
+            }
+            const holder = document.createElement("div");
+            holder.innerHTML = renderChangeCard(body);
+            card.replaceWith(holder.firstElementChild);
+        } catch (err) {
+            alert("Network error: " + err.message);
+            buttons.forEach(b => (b.disabled = false));
+        }
+        refreshApprovalsBadge();
+    }
+
+    async function loadChanges() {
+        const list = document.getElementById("change-list");
+        const status = changeFilter.value;
+        list.innerHTML = `<div class="schema-placeholder">Loading...</div>`;
+        try {
+            const res = await fetch(`/api/changes?${userQuery()}${status ? `&status=${encodeURIComponent(status)}` : ""}`);
+            const items = res.ok ? await res.json() : [];
+            list.innerHTML = items.length
+                ? items.map(item => renderChangeCard(item)).join("")
+                : `<div class="schema-placeholder">${status === "pending" ? "Nothing is waiting for approval." : "No change requests yet."}</div>`;
+            bindChangeActions(list);
+        } catch (err) {
+            list.innerHTML = `<div class="error-msg">Failed to load: ${escapeHtml(err.message)}</div>`;
+        }
+        refreshApprovalsBadge();
+    }
+
+    async function refreshApprovalsBadge() {
+        const badge = document.getElementById("nav-approvals-badge");
+        try {
+            const res = await fetch(`/api/changes?${userQuery()}&status=pending`);
+            if (!res.ok) return;
+            const items = await res.json();
+            badge.textContent = items.length;
+            badge.classList.toggle("hidden", items.length === 0);
+        } catch (_) {}
+    }
+
+    changeFilter.addEventListener("change", loadChanges);
+    document.getElementById("btn-refresh-changes").addEventListener("click", loadChanges);
+
+    function renderMemberCard(member, grants) {
+        const id = escapeHtml(member.id);
+        const name = escapeHtml(member.full_name);
+        const isAdminRole = member.role === "owner" || member.role === "admin";
+        const roleControl = member.role === "owner"
+            ? `<span class="badge">Owner</span>`
+            : `<select class="member-role" data-member="${id}" aria-label="Role for ${name}">
+                   ${["viewer", "analyst", "admin"].map(r => `<option value="${r}" ${r === member.role ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}
+               </select>`;
+        const chips = grants.length
+            ? grants.map(g => `
+                <span class="chip">
+                    ${escapeHtml(ACTION_LABELS[g.action] || g.action)} · ${g.table_name === "*" ? "all tables" : escapeHtml(g.table_name)}
+                    <button type="button" class="chip-remove" data-revoke="${escapeHtml(g.id)}" aria-label="Remove permission">×</button>
+                </span>`).join("")
+            : `<span class="change-meta">Read only</span>`;
+        const access = isAdminRole
+            ? `<div class="change-meta">Admins can ask for any change and approve requests.</div>`
+            : `<div class="grant-chips">${chips}</div>
+               <form class="grant-form" data-member="${id}">
+                   <select name="action" aria-label="Action">
+                       <option value="update">Update</option>
+                       <option value="insert">Add</option>
+                       <option value="delete">Delete</option>
+                   </select>
+                   <input name="table" placeholder="Table, or * for all" required aria-label="Table">
+                   <button type="submit" class="btn-secondary small-btn">Allow</button>
+               </form>`;
+        return `
+            <div class="memory-card member-card">
+                <div class="memory-card-header">
+                    <div>
+                        <strong>${name}</strong>
+                        <div class="change-meta">${escapeHtml(member.email)}</div>
+                    </div>
+                    ${roleControl}
+                </div>
+                ${access}
+            </div>`;
+    }
+
+    async function loadTeam() {
+        const list = document.getElementById("member-list");
+        if (!isAdminUser()) {
+            list.innerHTML = "";
+            return;
+        }
+        await loadMembers();
+        let grants = [];
+        try {
+            const res = await fetch(`/api/team/grants?${userQuery()}`);
+            if (res.ok) grants = await res.json();
+        } catch (_) {}
+        list.innerHTML = members.map(m => renderMemberCard(m, grants.filter(g => g.user_id === m.id))).join("");
+
+        list.querySelectorAll(".member-role").forEach(select => {
+            select.addEventListener("change", async () => {
+                const res = await fetch(`/api/team/members/${encodeURIComponent(select.dataset.member)}?${userQuery()}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ role: select.value }),
+                });
+                if (!res.ok) alert(errorText(await res.json()));
+                loadTeam();
+            });
+        });
+
+        list.querySelectorAll(".grant-form").forEach(form => {
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const res = await fetch(`/api/team/grants?${userQuery()}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        user_id: form.dataset.member,
+                        action: form.elements.action.value,
+                        table_name: form.elements.table.value.trim() || "*",
+                    }),
+                });
+                if (!res.ok) alert(errorText(await res.json()));
+                loadTeam();
+            });
+        });
+
+        list.querySelectorAll("[data-revoke]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                await fetch(`/api/team/grants/${encodeURIComponent(btn.dataset.revoke)}?${userQuery()}`, { method: "DELETE" });
+                loadTeam();
+            });
+        });
+    }
+
+    memberForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch(`/api/team/members?${userQuery()}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                full_name: document.getElementById("member-name").value.trim(),
+                email: document.getElementById("member-email").value.trim(),
+                role: document.getElementById("member-role").value,
+            }),
+        });
+        if (!res.ok) {
+            alert(errorText(await res.json()));
+            return;
+        }
+        memberForm.reset();
+        loadTeam();
+    });
 
     function escapeHtml(str) {
         return String(str)

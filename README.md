@@ -18,10 +18,19 @@ An upgraded enterprise Natural Language to SQL (NL2SQL) platform featuring a mod
    - Full versioning (`MemoryVersion`), superseding, expiration, deletion (clearing derived embeddings), and audit trails (`MemoryAuditLog`).
 4. **Context Engineering & SQL Safety**
    - Token-budgeted `ContextBuilder` with explicit instruction priority hierarchy and untrusted-data framing.
-   - `sqlglot`-powered read-only SQL & live-schema validation prior to execution.
-5. **UI Extensions**
+   - `sqlglot`-powered SQL planning: every statement is classified as a read or a single-table change and checked against the live schema.
+5. **Guardrails for Viewing and Changing Data**
+   - **Reads**: one statement, read-only transaction that is always rolled back, capped at `MAX_QUERY_ROWS`, and sensitive columns (`SENSITIVE_COLUMNS`) masked for non-admins.
+   - **Changes**: an employee can ask for an update, insert or delete only if an admin has allowed that action on that table (Team & Access). The chat shows a preview of the rows that will change and files a change request; nothing runs until an admin approves it.
+   - On approval the matching rows are counted again; if the data moved, nothing runs. The statement executes in a transaction that must touch exactly the previewed rows, otherwise it rolls back.
+   - Never allowed: schema changes or admin commands, updates/deletes without `WHERE`, multiple statements, joins in changes, or more than `WRITE_MAX_ROWS` rows. `ALLOW_DATA_CHANGES=False` turns changes off.
+   - Without sign-in the acting user is chosen in the sidebar, so these rules are not yet a security boundary.
+6. **Plain-Language Insights**
+   - Answers are written for non-technical employees: a direct answer, up to three insights, column statistics, the business definitions applied, the previous question, and a note when results were cut off or masked.
+7. **UI Extensions**
    - Context-Aware SQL Assistant with collapsible **Context Used** panel & conversation history.
    - **Memory Dashboard**, **Memory Details & Version History Modal**, **Context Inspector**, and **Business Knowledge Manager**.
+   - **Approvals** (change requests with previews; admins approve or reject) and **Team & Access** (members, roles and per-table permissions).
 
 ## Quick Start
 

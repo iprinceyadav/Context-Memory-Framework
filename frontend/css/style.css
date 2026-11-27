@@ -1418,3 +1418,162 @@ select, textarea {
     font-size: 12px;
     overflow-x: auto;
 }
+
+.identity-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.identity-section .section-title {
+    margin-bottom: 0;
+}
+
+.identity-select {
+    width: 100%;
+    padding: 8px 10px;
+}
+
+.identity-role {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.notice-msg {
+    background-color: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.result-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.change-card {
+    margin-top: 12px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.change-title {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.change-question {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.change-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.change-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.mono {
+    font-family: var(--font-mono);
+}
+
+.change-sql summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.change-sql pre {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background-color: var(--bg-base);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.badge-action-update { color: #38BDF8; border-color: rgba(56, 189, 248, 0.35); }
+.badge-action-insert { color: var(--success); border-color: rgba(16, 185, 129, 0.4); }
+.badge-action-delete { color: var(--error); border-color: rgba(239, 68, 68, 0.35); }
+.badge-status-executed { color: var(--success); border-color: rgba(16, 185, 129, 0.4); }
+.badge-status-failed { color: var(--error); border-color: rgba(239, 68, 68, 0.35); }
+
+.team-list {
+    margin-top: 24px;
+    max-width: 780px;
+}
+
+.member-card select {
+    padding: 6px 10px;
+}
+
+.grant-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 2px 4px 2px 10px;
+    border-radius: 999px;
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+}
+
+.chip-remove {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.chip-remove:hover,
+.chip-remove:focus-visible {
+    color: var(--error);
+}
+
+.grant-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.grant-form input {
+    flex: 1;
+    min-width: 160px;
+}
+
+.change-card button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
