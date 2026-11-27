@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -12,17 +12,20 @@ from app.core.auth import authorize_user, authorize_connection
 from app.core.config import settings
 from app.database.connection import SessionLocal, get_db
 from app.models.conversation import Conversation, Message
+from app.models.database_connection import DatabaseConnection
 from app.models.database_schema import DatabaseSchema
 from app.models.query_memory import QueryMemory
 from app.schemas.chat import ChatRequest, ChatResponse, ContextUsed, MemoryContext
 from app.schemas.conversation import ConversationCreate, ConversationResponse, MessageResponse
-from app.services.context_builder import ContextBuilder
+from app.services.access import is_admin, mask_rows
+from app.services.changes import ChangeRefused, ChangeService, serialize, summarize_request
+from app.services.context_builder import ContextBuilder, describe_results
 from app.services.connector import connector
 from app.services.encryption import decrypt
 from app.services.llm import llm
 from app.services.extraction import extractor
 from app.services.memory_store import MemoryStore
-from app.services.sql_guard import mask_literals, check_sql
+from app.services.sql_guard import mask_literals, plan_sql
 
 logger = logging.getLogger(__name__)
 
@@ -86,18 +89,18 @@ def _extract_in_background(
         session.close()
 
 
-def _resolve_target(req: ChatRequest, db: Session) -> Dict[str, Any]:
+def _resolve_target(req: ChatRequest, db: Session) -> Tuple[Dict[str, Any], Optional[DatabaseConnection]]:
     if req.connection_id:
-        conn = authorize_connection(db, req.connection_id, req.organization_id)
+        record = authorize_connection(db, req.connection_id, req.organization_id)
         return {
-            "db_type": conn.db_type,
-            "host": conn.host,
-            "port": conn.port,
-            "database_name": conn.database_name,
-            "username": conn.username,
-            "password": decrypt(conn.encrypted_password),
-            "connection_id": conn.id,
-        }
+            "db_type": record.db_type,
+            "host": record.host,
+            "port": record.port,
+            "database_name": record.database_name,
+            "username": record.username,
+            "password": decrypt(record.encrypted_password),
+            "connection_id": record.id,
+        }, record
 
     if not req.database_name:
         raise HTTPException(
@@ -113,54 +116,10 @@ def _resolve_target(req: ChatRequest, db: Session) -> Dict[str, Any]:
         "username": req.username or "",
         "password": req.password or "",
         "connection_id": None,
-    }
+    }, None
 
 
-@router.post("/ask", response_model=ChatResponse)
-def ask(
-    req: ChatRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    if not req.natural_query or not req.natural_query.strip():
-        raise HTTPException(status_code=400, detail="natural_query cannot be empty")
-
-    _, _ = authorize_user(db, req.organization_id, req.user_id)
-    target = _resolve_target(req, db)
-
-    conversation: Optional[Conversation] = None
-    if req.conversation_id:
-        conversation = (
-            db.query(Conversation)
-            .filter(
-                Conversation.id == req.conversation_id,
-                Conversation.organization_id == req.organization_id,
-                Conversation.user_id == req.user_id,
-            )
-            .first()
-        )
-        if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found or access denied")
-    else:
-        conversation = Conversation(
-            title=req.natural_query[:80],
-            organization_id=req.organization_id,
-            user_id=req.user_id,
-            connection_id=target["connection_id"],
-        )
-        db.add(conversation)
-        db.commit()
-        db.refresh(conversation)
-
-    user_msg = Message(
-        conversation_id=conversation.id,
-        role="user",
-        content=req.natural_query.strip(),
-    )
-    db.add(user_msg)
-    db.commit()
-    db.refresh(user_msg)
-
+def _load_schema(db: Session, target: Dict[str, Any]) -> Tuple[str, str]:
     schema_key = connector.fingerprint(
         db_type=target["db_type"],
         username=target["username"],
@@ -180,20 +139,92 @@ def ask(
                 db_name=target["database_name"],
                 platform_db=db,
             )
-            schema_row = db.query(DatabaseSchema).filter(DatabaseSchema.connection_hash == schema_key).first()
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Schema extraction failed: {exc}")
-
+        schema_row = db.query(DatabaseSchema).filter(DatabaseSchema.connection_hash == schema_key).first()
     if not schema_row:
         raise HTTPException(status_code=400, detail="Failed to retrieve or generate database schema.")
+    return schema_key, schema_row.schema_json
 
-    schema_json_str = schema_row.schema_json
+
+def _previous_question(db: Session, conversation_id: str) -> Optional[str]:
+    last = (
+        db.query(QueryMemory)
+        .filter(QueryMemory.conversation_id == conversation_id)
+        .order_by(QueryMemory.created_at.desc())
+        .first()
+    )
+    return last.natural_language_query if last else None
+
+
+def _run_read(
+    target: Dict[str, Any], record: Optional[DatabaseConnection], sql: str
+) -> Tuple[List[Dict[str, Any]], bool]:
+    if record is not None:
+        return connector.read(connector.engine_for(record), sql, settings.MAX_QUERY_ROWS)
+    engine = connector.open_engine(
+        db_type=target["db_type"],
+        username=target["username"],
+        password=target["password"],
+        host=target["host"],
+        port=target["port"],
+        db_name=target["database_name"],
+    )
+    try:
+        return connector.read(engine, sql, settings.MAX_QUERY_ROWS)
+    finally:
+        engine.dispose()
+
+
+@router.post("/ask", response_model=ChatResponse)
+def ask(
+    req: ChatRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    if not req.natural_query or not req.natural_query.strip():
+        raise HTTPException(status_code=400, detail="natural_query cannot be empty")
+
+    question = req.natural_query.strip()
+    _, user = authorize_user(db, req.organization_id, req.user_id)
+    target, record = _resolve_target(req, db)
+
+    conversation: Optional[Conversation] = None
+    if req.conversation_id:
+        conversation = (
+            db.query(Conversation)
+            .filter(
+                Conversation.id == req.conversation_id,
+                Conversation.organization_id == req.organization_id,
+                Conversation.user_id == req.user_id,
+            )
+            .first()
+        )
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found or access denied")
+    else:
+        conversation = Conversation(
+            title=question[:80],
+            organization_id=req.organization_id,
+            user_id=req.user_id,
+            connection_id=target["connection_id"],
+        )
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+
+    previous_question = _previous_question(db, conversation.id)
+    user_msg = Message(conversation_id=conversation.id, role="user", content=question)
+    db.add(user_msg)
+    db.commit()
+    db.refresh(user_msg)
+
+    schema_key, schema_json_str = _load_schema(db, target)
 
     context: Dict[str, Any]
     try:
-        builder = ContextBuilder(db)
-        context = builder.build(
-            natural_query=req.natural_query,
+        context = ContextBuilder(db).build(
+            natural_query=question,
             schema_json_str=schema_json_str,
             db_type=target["db_type"],
             organization_id=req.organization_id,
@@ -205,7 +236,7 @@ def ask(
         logger.warning("ContextBuilder failed; falling back to schema-only prompt: %s", exc)
         context = {
             "prompt": None,
-            "context_debug": {"query": req.natural_query, "error": str(exc)},
+            "context_debug": {"query": question, "error": str(exc)},
             "memory_ids": [],
             "used_memories": [],
             "schema_tables": [],
@@ -217,93 +248,138 @@ def ask(
             sql_query = llm.generate(context["prompt"])
         else:
             sql_query = llm.generate_sql(
-                natural_query=req.natural_query,
+                natural_query=question,
                 schema_json_str=schema_json_str,
                 db_type=target["db_type"],
             )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"LLM SQL generation failed: {exc}")
 
-    is_safe, safety_error, referenced_tables = check_sql(
-        sql=sql_query,
-        db_type=target["db_type"],
-        schema_json_str=schema_json_str,
-        enforce_read_only=settings.ENFORCE_READ_ONLY_SQL,
+    context_debug = context.get("context_debug", {})
+    used_memories = context.get("used_memories", [])
+    context_used = ContextUsed(
+        memories=[
+            MemoryContext(
+                memory_id=m["memory_id"],
+                content=m["content"],
+                type=m["memory_type"],
+                score=m["combined_score"],
+            )
+            for m in used_memories
+        ],
+        schema_tables=context.get("schema_tables", []),
+        conversation_turns=context.get("conversation_turns", 0),
+        tokens_used=context_debug.get("tokens_used", 0),
+        token_budget=context_debug.get("token_budget", settings.MEMORY_TOKEN_BUDGET),
     )
-    if not is_safe:
-        raise HTTPException(status_code=400, detail=safety_error)
+
+    def reply(outcome: str, text: str, change_request: Optional[Dict[str, Any]] = None) -> ChatResponse:
+        message = Message(
+            conversation_id=conversation.id,
+            role="assistant",
+            content=text,
+            sql_query=sql_query,
+            context_metadata=json.dumps(context_debug, default=str),
+        )
+        db.add(message)
+        db.commit()
+        db.refresh(message)
+        return ChatResponse(
+            conversation_id=conversation.id,
+            message_id=message.id,
+            natural_response=text,
+            sql_query=sql_query,
+            data=None,
+            context_used=context_used,
+            context_debug=context_debug,
+            extracted_memories=[],
+            outcome=outcome,
+            change_request=change_request,
+        )
+
+    plan = plan_sql(sql_query, target["db_type"], schema_json_str)
+    if not plan.ok:
+        return reply("not_allowed", plan.error)
+
+    if plan.is_write:
+        try:
+            request = ChangeService(db).propose(user, record, plan, question, conversation.id)
+        except ChangeRefused as refusal:
+            return reply(refusal.outcome, refusal.message)
+        except Exception as exc:
+            logger.warning("Could not prepare change request: %s", exc)
+            return reply("not_allowed", f"I couldn't prepare that change: {exc}")
+        follow_up = (
+            "Review it and approve it to apply the change."
+            if is_admin(user)
+            else "An admin has to approve it before anything changes."
+        )
+        return reply(
+            "change_requested",
+            f"{summarize_request(request)} is ready. {follow_up}",
+            serialize(db, request),
+        )
 
     try:
-        results = connector.execute(
-            db_type=target["db_type"],
-            username=target["username"],
-            password=target["password"],
-            host=target["host"],
-            port=target["port"],
-            db_name=target["database_name"],
-            query=sql_query,
-        )
-        if isinstance(results, list) and len(results) > settings.MAX_QUERY_ROWS:
-            results = results[: settings.MAX_QUERY_ROWS]
+        rows, truncated = _run_read(target, record, plan.sql)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"SQL execution failed: {exc}")
 
-    preferences = [
-        m["content"]
-        for m in context.get("used_memories", [])
-        if m.get("memory_type") == "procedural"
-    ]
+    rows, hidden_columns = mask_rows(rows, user)
+    definitions = [m["content"] for m in used_memories if m.get("memory_type") == "semantic"]
+    preferences = [m["content"] for m in used_memories if m.get("memory_type") == "procedural"]
     try:
-        builder = ContextBuilder(db)
-        summary_prompt = builder.build_summary_prompt(
-            query=req.natural_query,
-            sql=sql_query,
-            results=results,
+        summary_prompt = ContextBuilder(db).build_summary_prompt(
+            query=question,
+            sql=plan.sql,
+            results=rows,
             db_type=target["db_type"],
             preferences=preferences,
+            definitions=definitions,
+            truncated=truncated,
+            hidden_columns=hidden_columns,
+            previous_question=previous_question,
         )
         natural_response = llm.summarize(summary_prompt)
     except Exception as exc:
         logger.warning("Natural response generation fallback: %s", exc)
-        row_count = len(results) if isinstance(results, list) else 0
-        natural_response = f"Executed SQL query successfully and returned {row_count} row(s)."
+        natural_response = describe_results(rows, truncated)
 
-    context_debug = context.get("context_debug", {})
     assistant_msg = Message(
         conversation_id=conversation.id,
         role="assistant",
         content=natural_response,
         sql_query=sql_query,
-        query_results=json.dumps({"row_count": len(results) if isinstance(results, list) else 0}, default=str),
+        query_results=json.dumps({"row_count": len(rows), "truncated": truncated}),
         context_metadata=json.dumps(context_debug, default=str),
     )
     db.add(assistant_msg)
 
-    query_meta = _query_metadata(req.natural_query, sql_query, referenced_tables)
-    query_record = QueryMemory(
-        organization_id=req.organization_id,
-        user_id=req.user_id,
-        connection_id=target["connection_id"],
-        conversation_id=conversation.id,
-        natural_language_query=req.natural_query.strip(),
-        normalized_intent=query_meta["intent"],
-        sanitized_sql_template=mask_literals(sql_query),
-        structured_query_metadata=json.dumps(query_meta),
-        execution_status="success",
-        schema_hash=schema_key,
+    query_meta = _query_metadata(question, plan.sql, plan.tables)
+    db.add(
+        QueryMemory(
+            organization_id=req.organization_id,
+            user_id=req.user_id,
+            connection_id=target["connection_id"],
+            conversation_id=conversation.id,
+            natural_language_query=question,
+            normalized_intent=query_meta["intent"],
+            sanitized_sql_template=mask_literals(plan.sql),
+            structured_query_metadata=json.dumps(query_meta),
+            execution_status="success",
+            schema_hash=schema_key,
+        )
     )
-    db.add(query_record)
-    conversation.active_task_summary = req.natural_query[:200]
+    conversation.active_task_summary = question[:200]
     db.commit()
     db.refresh(assistant_msg)
 
-    turns = [
-        {"role": "user", "content": req.natural_query.strip()},
-        {"role": "assistant", "content": natural_response},
-    ]
     background_tasks.add_task(
         _extract_in_background,
-        turns,
+        [
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": natural_response},
+        ],
         req.user_id,
         req.organization_id,
         target["connection_id"],
@@ -313,31 +389,18 @@ def ask(
         db.get_bind(),
     )
 
-    memory_refs = [
-        MemoryContext(
-            memory_id=m["memory_id"],
-            content=m["content"],
-            type=m["memory_type"],
-            score=m["combined_score"],
-        )
-        for m in context.get("used_memories", [])
-    ]
-
     return ChatResponse(
         conversation_id=conversation.id,
         message_id=assistant_msg.id,
         natural_response=natural_response,
         sql_query=sql_query,
-        data=results,
-        context_used=ContextUsed(
-            memories=memory_refs,
-            schema_tables=context.get("schema_tables", []),
-            conversation_turns=context.get("conversation_turns", 0),
-            tokens_used=context_debug.get("tokens_used", 0),
-            token_budget=context_debug.get("token_budget", settings.MEMORY_TOKEN_BUDGET),
-        ),
+        data=rows,
+        context_used=context_used,
         context_debug=context_debug,
         extracted_memories=[],
+        outcome="answer",
+        truncated=truncated,
+        hidden_columns=hidden_columns,
     )
 
 

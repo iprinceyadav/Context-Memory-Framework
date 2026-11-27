@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
+from app.schemas.access import ChangeRequestOut
+
 
 class ChatRequest(BaseModel):
     natural_query: str
@@ -40,6 +42,10 @@ class ChatResponse(BaseModel):
     context_used: Optional[ContextUsed] = None
     context_debug: Optional[Dict[str, Any]] = None
     extracted_memories: Optional[List[Dict[str, Any]]] = None
+    outcome: str = "answer"
+    truncated: bool = False
+    hidden_columns: List[str] = Field(default_factory=list)
+    change_request: Optional[ChangeRequestOut] = None
 
 
 class ContextDebugInfo(BaseModel):

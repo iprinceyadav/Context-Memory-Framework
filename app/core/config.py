@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     RETRIEVAL_WEIGHT_TYPE: float = 0.10
 
     ENFORCE_READ_ONLY_SQL: bool = True
+    ALLOW_DATA_CHANGES: bool = True
+    WRITE_MAX_ROWS: int = 50
+    SENSITIVE_COLUMNS: str = "password,passwd,secret,token,api_key,apikey,ssn,card_number,cvv,pin_code"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

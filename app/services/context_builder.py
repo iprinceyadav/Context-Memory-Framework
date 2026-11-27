@@ -18,6 +18,50 @@ def _count_tokens(text: str) -> int:
     return max(1, len(text) // 4) if text else 0
 
 
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def column_stats(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    if not rows:
+        return {}
+    stats: Dict[str, Dict[str, Any]] = {}
+    for column in rows[0].keys():
+        values = [row.get(column) for row in rows if row.get(column) is not None]
+        if not values:
+            continue
+        numbers = [value for value in values if _is_number(value)]
+        if numbers and len(numbers) == len(values):
+            total = sum(numbers)
+            stats[column] = {
+                "min": round(min(numbers), 2),
+                "max": round(max(numbers), 2),
+                "total": round(total, 2),
+                "average": round(total / len(numbers), 2),
+            }
+            continue
+        counts: Dict[str, int] = {}
+        for value in values:
+            key = str(value)
+            counts[key] = counts.get(key, 0) + 1
+        top = sorted(counts.items(), key=lambda item: item[1], reverse=True)[:3]
+        stats[column] = {"distinct": len(counts), "most_common": [f"{key} ({count})" for key, count in top]}
+    return stats
+
+
+def describe_results(rows: List[Dict[str, Any]], truncated: bool) -> str:
+    if not rows:
+        return "No matching records were found."
+    noun = "record" if len(rows) == 1 else "records"
+    lead = f"Found {len(rows)} {noun}" + (" (showing the first ones only)." if truncated else ".")
+    numeric = [
+        f"{column}: total {values['total']}, average {values['average']}"
+        for column, values in column_stats(rows).items()
+        if "total" in values
+    ][:2]
+    return lead + (" " + "; ".join(numeric) + "." if numeric and len(rows) > 1 else "")
+
+
 class ContextBuilder:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -107,7 +151,7 @@ class ContextBuilder:
             "SYSTEM INSTRUCTIONS:\n"
             f"You are an expert {db_type} SQL assistant.\n"
             "INSTRUCTION PRIORITY HIERARCHY (highest to lowest):\n"
-            "1. System security & read-only SQL rules.\n"
+            "1. System security rules: read-only by default; a data change is one approved statement on one table.\n"
             "2. Current LIVE DATABASE SCHEMA and database permissions (always authoritative over memories).\n"
             "3. Current explicit user instruction for this specific query (a one-time override applies to this query only).\n"
             "4. Confirmed business definitions (Semantic Memories).\n"
@@ -121,9 +165,13 @@ class ContextBuilder:
         question_section = f"CURRENT QUESTION:\n{natural_query}"
         requirements_section = (
             "SQL GENERATION REQUIREMENTS:\n"
-            "- Generate ONLY a valid read-only SELECT (or WITH ... SELECT) query for "
-            f"{db_type}.\n"
+            f"- To answer a question, generate ONE read-only SELECT (or WITH ... SELECT) query for {db_type}.\n"
+            "- Only when the user explicitly asks to change records (update, add or delete), generate ONE UPDATE, "
+            "INSERT or DELETE on a single table instead. UPDATE and DELETE must target specific rows with a WHERE "
+            "clause on identifying columns. The change is previewed and needs admin approval before it runs.\n"
+            "- Never generate schema changes (CREATE, ALTER, DROP, TRUNCATE) or administrative commands.\n"
             "- Use ONLY tables and columns present in LIVE DATABASE SCHEMA.\n"
+            "- Use readable column aliases, and add a LIMIT when listing individual rows.\n"
             "- Apply relevant business definitions unless explicitly overridden by the current question.\n"
             "- If the current question is a follow-up (e.g., filtering, sorting, limiting), build upon PREVIOUS ANALYTICAL CONTEXT and RECENT CONVERSATION.\n"
             "- CRITICAL: Return ONLY the raw SQL query with no markdown fences or explanation."
@@ -240,24 +288,46 @@ class ContextBuilder:
         results: Any,
         db_type: str,
         preferences: Optional[List[str]] = None,
+        definitions: Optional[List[str]] = None,
+        truncated: bool = False,
+        hidden_columns: Optional[List[str]] = None,
+        previous_question: Optional[str] = None,
     ) -> str:
+        rows = results if isinstance(results, list) else []
         try:
-            preview = json.dumps(results[:15], default=str) if isinstance(results, list) else str(results)
+            sample = json.dumps(rows[:20], default=str)
         except Exception:
-            preview = str(results)[:1500]
+            sample = str(rows[:20])[:3000]
 
-        preference_block = ""
-        if preferences:
-            preference_block = "\nUser/Formatting Preferences to honor:\n- " + "\n- ".join(preferences)
-
-        row_count = len(results) if isinstance(results, list) else 0
-        return (
-            "You are a helpful data analyst assistant.\n"
-            f"User Question: {query}\n"
-            f"Executed {db_type} SQL: {sql}\n"
-            f"Total rows returned: {row_count}\n"
-            f"Sample Results (JSON): {preview}\n"
-            f"{preference_block}\n\n"
-            "Provide a concise, accurate, clear natural-language answer summarizing the findings. "
-            "Do not invent numbers not present in the results."
+        lines = [
+            "You are a friendly data analyst explaining database results to an employee who does not know SQL.",
+            f"Question: {query}",
+        ]
+        if previous_question:
+            lines.append(f"Previous question in this conversation: {previous_question}")
+        lines.append(
+            f"Rows returned: {len(rows)}" + (" (only the first rows are shown; more exist)" if truncated else "")
         )
+        if rows:
+            lines.append(f"Columns: {', '.join(str(key) for key in rows[0].keys())}")
+            stats = column_stats(rows)
+            if stats:
+                lines.append("Column summary over the returned rows: " + json.dumps(stats, default=str))
+        if definitions:
+            lines.append("Business definitions that were applied:\n- " + "\n- ".join(definitions))
+        if preferences:
+            lines.append("Preferences to honour:\n- " + "\n- ".join(preferences))
+        if hidden_columns:
+            lines.append(f"Masked for privacy (do not guess their values): {', '.join(hidden_columns)}")
+        lines.append(f"How the data was fetched ({db_type}, for your reference only, never show it): {sql}")
+        lines.append(f"Result rows (JSON): {sample}")
+        lines.append(
+            "Write the answer:\n"
+            "- Start with one sentence that directly answers the question using the actual numbers.\n"
+            "- Then up to 3 short bullet points with useful insights: totals, biggest and smallest, notable "
+            "differences or anything unusual. Skip the bullets when the answer is a single value.\n"
+            "- If a business definition shaped the result, say so in plain words.\n"
+            "- If only the first rows are shown, say the answer covers those rows.\n"
+            "- Never mention SQL, tables, joins or data types, and never invent numbers that are not in the data."
+        )
+        return "\n".join(lines)
